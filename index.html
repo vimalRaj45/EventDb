@@ -1,0 +1,1096 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Event Management API Tester</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1, h2 {
+            color: #333;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        .endpoint {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #eee;
+            border-radius: 5px;
+            background-color: white;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .response {
+            margin-top: 15px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: #f0f0f0;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .token-display {
+            word-break: break-all;
+            background-color: #f0f0f0;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+        .tab {
+            overflow: hidden;
+            border: 1px solid #ccc;
+            background-color: #f1f1f1;
+            border-radius: 5px 5px 0 0;
+        }
+        .tab button {
+            background-color: inherit;
+            float: left;
+            border: none;
+            outline: none;
+            cursor: pointer;
+            padding: 14px 16px;
+            transition: 0.3s;
+            color: black;
+        }
+        .tab button:hover {
+            background-color: #ddd;
+        }
+        .tab button.active {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .tabcontent {
+            display: none;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-top: none;
+            border-radius: 0 0 5px 5px;
+        }
+        .file-input {
+            margin-bottom: 10px;
+        }
+        .json-editor {
+            width: 100%;
+            min-height: 100px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Event Management API Tester</h1>
+        
+        <div class="tab">
+            <button class="tablinks active" onclick="openTab(event, 'Auth')">Authentication</button>
+            <button class="tablinks" onclick="openTab(event, 'Events')">Events</button>
+            <button class="tablinks" onclick="openTab(event, 'Participants')">Participants</button>
+            <button class="tablinks" onclick="openTab(event, 'Results')">Results</button>
+            <button class="tablinks" onclick="openTab(event, 'Certificates')">Certificates</button>
+            <button class="tablinks" onclick="openTab(event, 'Gallery')">Gallery</button>
+            <button class="tablinks" onclick="openTab(event, 'Profile')">Profile</button>
+        </div>
+
+        <!-- Authentication Tab -->
+        <div id="Auth" class="tabcontent" style="display: block;">
+            <div class="section">
+                <h2>Authentication</h2>
+                
+                <div class="endpoint">
+                    <h3>Register User</h3>
+                    <div class="form-group">
+                        <label for="register-name">Name:</label>
+                        <input type="text" id="register-name" placeholder="John Doe">
+                    </div>
+                    <div class="form-group">
+                        <label for="register-email">Email:</label>
+                        <input type="email" id="register-email" placeholder="john@example.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="register-password">Password:</label>
+                        <input type="password" id="register-password" placeholder="Password">
+                    </div>
+                    <div class="form-group">
+                        <label for="register-role">Role:</label>
+                        <select id="register-role">
+                            <option value="participant">Participant</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                    <button onclick="registerUser()">Register</button>
+                    <div class="response" id="register-response"></div>
+                </div>
+                
+                <div class="endpoint">
+                    <h3>Login User</h3>
+                    <div class="form-group">
+                        <label for="login-email">Email:</label>
+                        <input type="email" id="login-email" placeholder="john@example.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="login-password">Password:</label>
+                        <input type="password" id="login-password" placeholder="Password">
+                    </div>
+                    <button onclick="loginUser()">Login</button>
+                    <div class="response" id="login-response"></div>
+                </div>
+                
+                <div class="endpoint">
+                    <h3>Current Token</h3>
+                    <div class="token-display" id="current-token">No token set</div>
+                    <button onclick="clearToken()">Clear Token</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Events Tab -->
+        <div id="Events" class="tabcontent">
+            <div class="section">
+                <h2>Events</h2>
+                
+                <div class="endpoint">
+                    <h3>Get All Events</h3>
+                    <div class="form-group">
+                        <label for="event-status">Filter by Status:</label>
+                        <select id="event-status">
+                            <option value="">All</option>
+                            <option value="upcoming">Upcoming</option>
+                            <option value="ongoing">Ongoing</option>
+                            <option value="completed">Completed</option>
+                            <option value="cancelled">Cancelled</option>
+                        </select>
+                    </div>
+                    <button onclick="getAllEvents()">Get Events</button>
+                    <div class="response" id="get-events-response"></div>
+                </div>
+                
+                <div class="endpoint">
+                    <h3>Get Single Event</h3>
+                    <div class="form-group">
+                        <label for="get-event-id">Event ID:</label>
+                        <input type="text" id="get-event-id" placeholder="1">
+                    </div>
+                    <button onclick="getSingleEvent()">Get Event</button>
+                    <div class="response" id="get-single-event-response"></div>
+                </div>
+                
+                <div class="endpoint">
+                    <h3>Create Event (Admin Only)</h3>
+                    <div class="form-group">
+                        <label for="event-title">Title:</label>
+                        <input type="text" id="event-title" placeholder="Annual Quiz Competition">
+                    </div>
+                    <div class="form-group">
+                        <label for="event-description">Description:</label>
+                        <textarea id="event-description" placeholder="Short description"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="event-detailed-description">Detailed Description:</label>
+                        <textarea id="event-detailed-description" placeholder="Detailed description"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="event-rules">Rules:</label>
+                        <textarea id="event-rules" placeholder="Event rules"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="event-type">Event Type:</label>
+                        <select id="event-type">
+                            <option value="quiz">Quiz</option>
+                            <option value="webinar">Webinar</option>
+                            <option value="essay">Essay</option>
+                            <option value="workshop">Workshop</option>
+                            <option value="competition">Competition</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="event-poster-url">Poster URL:</label>
+                        <input type="text" id="event-poster-url" placeholder="https://example.com/poster.jpg">
+                    </div>
+                    <div class="form-group">
+                        <label for="event-banner-url">Banner URL:</label>
+                        <input type="text" id="event-banner-url" placeholder="https://example.com/banner.jpg">
+                    </div>
+                    <div class="form-group">
+                        <label for="event-start-date">Start Date:</label>
+                        <input type="datetime-local" id="event-start-date">
+                    </div>
+                    <div class="form-group">
+                        <label for="event-end-date">End Date:</label>
+                        <input type="datetime-local" id="event-end-date">
+                    </div>
+                    <div class="form-group">
+                        <label for="event-registration-deadline">Registration Deadline:</label>
+                        <input type="datetime-local" id="event-registration-deadline">
+                    </div>
+                    <div class="form-group">
+                        <label for="event-max-participants">Max Participants:</label>
+                        <input type="number" id="event-max-participants" placeholder="100">
+                    </div>
+                    <div class="form-group">
+                        <label for="event-status-create">Status:</label>
+                        <select id="event-status-create">
+                            <option value="upcoming">Upcoming</option>
+                            <option value="ongoing">Ongoing</option>
+                            <option value="completed">Completed</option>
+                            <option value="cancelled">Cancelled</option>
+                        </select>
+                    </div>
+                    <button onclick="HandlecreateEvent()">Create Event</button>
+                    <div class="response" id="create-event-response"></div>
+                </div>
+                
+  <div class="endpoint">
+  <h3>Edit Event (Admin Only)</h3>
+
+  <!-- Search by ID -->
+  <div class="form-group">
+    <label for="edit-event-id">Enter Event ID to Load:</label>
+    <input type="text" id="edit-event-id" placeholder="e.g., 12">
+    <button onclick="loadEventDetails()">Load Event</button>
+  </div>
+
+  <!-- Editable Form -->
+  <div id="edit-event-form" style="display: none;">
+    <div class="form-group">
+      <label for="edit-event-title">Title:</label>
+      <input type="text" id="edit-event-title">
+    </div>
+
+    <div class="form-group">
+      <label for="edit-event-description">Description:</label>
+      <textarea id="edit-event-description"></textarea>
+    </div>
+
+    <div class="form-group">
+      <label for="edit-event-detailed-description">Detailed Description:</label>
+      <textarea id="edit-event-detailed-description"></textarea>
+    </div>
+
+    <div class="form-group">
+      <label for="edit-event-rules">Rules:</label>
+      <textarea id="edit-event-rules"></textarea>
+    </div>
+
+    <div class="form-group">
+      <label for="edit-event-type">Event Type:</label>
+      <select id="edit-event-type">
+        <option value="quiz">Quiz</option>
+        <option value="webinar">Webinar</option>
+        <option value="essay">Essay</option>
+        <option value="workshop">Workshop</option>
+        <option value="competition">Competition</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label for="edit-event-poster-url">Poster URL:</label>
+      <input type="text" id="edit-event-poster-url">
+    </div>
+
+    <div class="form-group">
+      <label for="edit-event-banner-url">Banner URL:</label>
+      <input type="text" id="edit-event-banner-url">
+    </div>
+
+    <div class="form-group">
+      <label for="edit-event-start-date">Start Date:</label>
+      <input type="datetime-local" id="edit-event-start-date">
+    </div>
+
+    <div class="form-group">
+      <label for="edit-event-end-date">End Date:</label>
+      <input type="datetime-local" id="edit-event-end-date">
+    </div>
+
+    <div class="form-group">
+      <label for="edit-event-registration-deadline">Registration Deadline:</label>
+      <input type="datetime-local" id="edit-event-registration-deadline">
+    </div>
+
+    <div class="form-group">
+      <label for="edit-event-max-participants">Max Participants:</label>
+      <input type="number" id="edit-event-max-participants">
+    </div>
+
+    <div class="form-group">
+      <label for="edit-event-status">Status:</label>
+      <select id="edit-event-status">
+        <option value="upcoming">Upcoming</option>
+        <option value="ongoing">Ongoing</option>
+        <option value="completed">Completed</option>
+        <option value="cancelled">Cancelled</option>
+      </select>
+    </div>
+
+    <button onclick="HandleEditEvent()">Update Event</button>
+  </div>
+
+  <div class="response" id="edit-event-response"></div>
+</div>
+
+                
+                <div class="endpoint">
+                    <h3>Delete Event (Admin Only)</h3>
+                    <div class="form-group">
+                        <label for="delete-event-id">Event ID:</label>
+                        <input type="text" id="delete-event-id" placeholder="1">
+                    </div>
+                    <button onclick="deleteEvent()">Delete Event</button>
+                    <div class="response" id="delete-event-response"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Participants Tab -->
+        <div id="Participants" class="tabcontent">
+            <div class="section">
+                <h2>Participants</h2>
+                
+                <div class="endpoint">
+                    <h3>Register for Event</h3>
+                    <div class="form-group">
+                        <label for="register-event-id">Event ID:</label>
+                        <input type="text" id="register-event-id" placeholder="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="register-data">Registration Data (JSON):</label>
+                        <textarea id="register-data" class="json-editor" placeholder='{"team_name": "Team A", "members": 3}'>{"team_name": "Team A"}</textarea>
+                    </div>
+                    <button onclick="registerForEvent()">Register</button>
+                    <div class="response" id="register-for-event-response"></div>
+                </div>
+                
+                <div class="endpoint">
+                    <h3>Get Event Participants (Admin Only)</h3>
+                    <div class="form-group">
+                        <label for="participants-event-id">Event ID:</label>
+                        <input type="text" id="participants-event-id" placeholder="1">
+                    </div>
+                    <button onclick="getEventParticipants()">Get Participants</button>
+                    <div class="response" id="event-participants-response"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Tab -->
+        <div id="Results" class="tabcontent">
+            <div class="section">
+                <h2>Results</h2>
+                
+                <div class="endpoint">
+                    <h3>Get Event Results</h3>
+                    <div class="form-group">
+                        <label for="results-event-id">Event ID:</label>
+                        <input type="text" id="results-event-id" placeholder="1">
+                    </div>
+                    <button onclick="getEventResults()">Get Results</button>
+                    <div class="response" id="event-results-response"></div>
+                </div>
+                
+                <div class="endpoint">
+                    <h3>Add/Update Result (Admin Only)</h3>
+                    <div class="form-group">
+                        <label for="result-event-id">Event ID:</label>
+                        <input type="text" id="result-event-id" placeholder="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="result-participant-id">Participant ID:</label>
+                        <input type="text" id="result-participant-id" placeholder="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="result-score">Score:</label>
+                        <input type="number" id="result-score" placeholder="85">
+                    </div>
+                    <div class="form-group">
+                        <label for="result-rank">Rank:</label>
+                        <input type="number" id="result-rank" placeholder="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="result-remarks">Remarks:</label>
+                        <input type="text" id="result-remarks" placeholder="Excellent performance">
+                    </div>
+                    <button onclick="addUpdateResult()">Add/Update Result</button>
+                    <div class="response" id="add-result-response"></div>
+                </div>
+                
+                <div class="endpoint">
+                    <h3>Get Results Template (Admin Only)</h3>
+                    <div class="form-group">
+                        <label for="template-event-id">Event ID:</label>
+                        <input type="text" id="template-event-id" placeholder="1">
+                    </div>
+                    <button onclick="getResultsTemplate()">Download Template</button>
+                </div>
+                
+                <div class="endpoint">
+                    <h3>Upload Results CSV (Admin Only)</h3>
+                    <div class="form-group">
+                        <label for="csv-event-id">Event ID:</label>
+                        <input type="text" id="csv-event-id" placeholder="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="csv-file">CSV File:</label>
+                        <input type="file" id="csv-file" class="file-input" accept=".csv">
+                        <small>CSV format: email,score,rank,remarks</small>
+                    </div>
+                    <button onclick="uploadResultsCSV()">Upload CSV</button>
+                    <div class="response" id="upload-csv-response"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Certificates Tab -->
+        <div id="Certificates" class="tabcontent">
+            <div class="section">
+                <h2>Certificates</h2>
+                
+                <div class="endpoint">
+                    <h3>Get My Certificates</h3>
+                    <button onclick="getMyCertificates()">Get Certificates</button>
+                    <div class="response" id="my-certificates-response"></div>
+                </div>
+                
+                <div class="endpoint">
+                    <h3>Get Certificate by Code</h3>
+                    <div class="form-group">
+                        <label for="certificate-code">Certificate Code:</label>
+                        <input type="text" id="certificate-code" placeholder="abc123">
+                    </div>
+                    <button onclick="getCertificateByCode()">Get Certificate</button>
+                    <div class="response" id="certificate-by-code-response"></div>
+                </div>
+                
+                <div class="endpoint">
+                    <h3>Upload Certificate (Admin Only)</h3>
+                    <div class="form-group">
+                        <label for="cert-event-id">Event ID:</label>
+                        <input type="text" id="cert-event-id" placeholder="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="cert-participant-id">Participant ID:</label>
+                        <input type="text" id="cert-participant-id" placeholder="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="cert-file">Certificate File (PDF):</label>
+                        <input type="file" id="cert-file" class="file-input" accept=".pdf">
+                    </div>
+                    <button onclick="uploadCertificate()">Upload Certificate</button>
+                    <div class="response" id="upload-certificate-response"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Gallery Tab -->
+        <div id="Gallery" class="tabcontent">
+            <div class="section">
+                <h2>Event Gallery</h2>
+                
+                <div class="endpoint">
+                    <h3>Get Event Gallery</h3>
+                    <div class="form-group">
+                        <label for="gallery-event-id">Event ID:</label>
+                        <input type="text" id="gallery-event-id" placeholder="1">
+                    </div>
+                    <button onclick="getEventGallery()">Get Gallery</button>
+                    <div class="response" id="event-gallery-response"></div>
+                </div>
+                
+                <div class="endpoint">
+                    <h3>Upload Gallery Image (Admin Only)</h3>
+                    <div class="form-group">
+                        <label for="gallery-upload-event-id">Event ID:</label>
+                        <input type="text" id="gallery-upload-event-id" placeholder="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="gallery-image">Image:</label>
+                        <input type="file" id="gallery-image" class="file-input" accept="image/*">
+                    </div>
+                    <div class="form-group">
+                        <label for="gallery-caption">Caption:</label>
+                        <input type="text" id="gallery-caption" placeholder="Event photo">
+                    </div>
+                    <button onclick="uploadGalleryImage()">Upload Image</button>
+                    <div class="response" id="upload-gallery-response"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Profile Tab -->
+        <div id="Profile" class="tabcontent">
+            <div class="section">
+                <h2>User Profile</h2>
+                
+                <div class="endpoint">
+                    <h3>Get My Profile</h3>
+                    <button onclick="getMyProfile()">Get Profile</button>
+                    <div class="response" id="my-profile-response"></div>
+                </div>
+                
+                <div class="endpoint">
+                    <h3>Get My Events</h3>
+                    <button onclick="getMyEvents()">Get My Events</button>
+                    <div class="response" id="my-events-response"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:4000/api';
+        let currentToken = localStorage.getItem('jwtToken') || '';
+        
+        // Display current token on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            updateTokenDisplay();
+        });
+        
+        function openTab(evt, tabName) {
+            const tabcontent = document.getElementsByClassName("tabcontent");
+            for (let i = 0; i < tabcontent.length; i++) {
+                tabcontent[i].style.display = "none";
+            }
+            
+            const tablinks = document.getElementsByClassName("tablinks");
+            for (let i = 0; i < tablinks.length; i++) {
+                tablinks[i].className = tablinks[i].className.replace(" active", "");
+            }
+            
+            document.getElementById(tabName).style.display = "block";
+            evt.currentTarget.className += " active";
+        }
+        
+        function updateTokenDisplay() {
+            document.getElementById('current-token').textContent = currentToken || 'No token set';
+        }
+        
+        function clearToken() {
+            currentToken = '';
+            localStorage.removeItem('jwtToken');
+            updateTokenDisplay();
+            alert('Token cleared');
+        }
+        
+        function setToken(token) {
+            currentToken = token;
+            localStorage.setItem('jwtToken', token);
+            updateTokenDisplay();
+        }
+        
+        async function makeRequest(method, endpoint, data = null, requiresAuth = true) {
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            
+            if (requiresAuth && currentToken) {
+                headers['Authorization'] = `Bearer ${currentToken}`;
+            }
+            
+            const options = {
+                method,
+                headers
+            };
+            
+            if (data) {
+                options.body = JSON.stringify(data);
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
+                let result;
+                
+                // Handle empty responses
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    result = await response.json();
+                } else {
+                    result = await response.text();
+                }
+                
+                if (!response.ok) {
+                    throw new Error(result.error || result.message || 'Request failed');
+                }
+                
+                return result;
+            } catch (error) {
+                console.error('API Error:', error);
+                throw error;
+            }
+        }
+        
+       function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64 = reader.result.split(',')[1]; // remove prefix
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+
+        // Authentication functions
+        async function registerUser() {
+            try {
+                const name = document.getElementById('register-name').value;
+                const email = document.getElementById('register-email').value;
+                const password = document.getElementById('register-password').value;
+                const role = document.getElementById('register-role').value;
+                
+                const data = {
+                    name,
+                    email,
+                    password,
+                    role
+                };
+                
+                const result = await makeRequest('POST', '/auth/register', data, false);
+                document.getElementById('register-response').textContent = JSON.stringify(result, null, 2);
+            } catch (error) {
+                document.getElementById('register-response').textContent = `Error: ${error.message}`;
+            }
+        }
+        
+        async function loginUser() {
+            try {
+                const email = document.getElementById('login-email').value;
+                const password = document.getElementById('login-password').value;
+                
+                const data = {
+                    email,
+                    password
+                };
+                
+                const result = await makeRequest('POST', '/auth/login', data, false);
+                setToken(result.token);
+                document.getElementById('login-response').textContent = JSON.stringify(result, null, 2);
+            } catch (error) {
+                document.getElementById('login-response').textContent = `Error: ${error.message}`;
+            }
+        }
+        
+        // Event functions
+        async function getAllEvents() {
+            try {
+                const status = document.getElementById('event-status').value;
+                const endpoint = status ? `/events?status=${status}` : '/events';
+                
+                const result = await makeRequest('GET', endpoint);
+                document.getElementById('get-events-response').textContent = JSON.stringify(result, null, 2);
+            } catch (error) {
+                document.getElementById('get-events-response').textContent = `Error: ${error.message}`;
+            }
+        }
+        
+        async function getSingleEvent() {
+            try {
+                const eventId = document.getElementById('get-event-id').value;
+                const result = await makeRequest('GET', `/events/${eventId}`);
+                document.getElementById('get-single-event-response').textContent = JSON.stringify(result, null, 2);
+            } catch (error) {
+                document.getElementById('get-single-event-response').textContent = `Error: ${error.message}`;
+            }
+        }
+        
+        async function HandlecreateEvent() {
+            try {
+                const data = {
+                    title: document.getElementById('event-title').value,
+                    description: document.getElementById('event-description').value,
+                    detailed_description: document.getElementById('event-detailed-description').value,
+                    rules: document.getElementById('event-rules').value,
+                    event_type: document.getElementById('event-type').value,
+                    poster_url: document.getElementById('event-poster-url').value,
+                    banner_url: document.getElementById('event-banner-url').value,
+                    start_date: document.getElementById('event-start-date').value,
+                    end_date: document.getElementById('event-end-date').value,
+                    registration_deadline: document.getElementById('event-registration-deadline').value,
+                    max_participants: parseInt(document.getElementById('event-max-participants').value) || null,
+                    status: document.getElementById('event-status-create').value
+                };
+                
+                // Convert empty strings to null for optional fields
+                for (const key in data) {
+                    if (data[key] === '') {
+                        data[key] = null;
+                    }
+                }
+                
+                const result = await makeRequest('POST', '/events', data);
+                document.getElementById('create-event-response').textContent = JSON.stringify(result, null, 2);
+            } catch (error) {
+                document.getElementById('create-event-response').textContent = `Error: ${error.message}`;
+            }
+        }
+        
+     async function loadEventDetails() {
+  const eventId = document.getElementById('edit-event-id').value;
+  const responseDiv = document.getElementById('edit-event-response');
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/events/${eventId}`, {
+      headers: {
+        'Authorization': `Bearer ${currentToken}` // Add if using token
+      }
+    });
+
+    if (!res.ok) {
+      throw new Error('Event not found');
+    }
+
+    const data = await res.json();
+
+    // Fill form fields
+    document.getElementById('edit-event-title').value = data.title || '';
+    document.getElementById('edit-event-description').value = data.description || '';
+    document.getElementById('edit-event-detailed-description').value = data.detailed_description || '';
+    document.getElementById('edit-event-rules').value = data.rules || '';
+    document.getElementById('edit-event-type').value = data.event_type || 'quiz';
+    document.getElementById('edit-event-poster-url').value = data.poster_url || '';
+    document.getElementById('edit-event-banner-url').value = data.banner_url || '';
+    document.getElementById('edit-event-start-date').value = formatDateTime(data.start_date);
+    document.getElementById('edit-event-end-date').value = formatDateTime(data.end_date);
+    document.getElementById('edit-event-registration-deadline').value = formatDateTime(data.registration_deadline);
+    document.getElementById('edit-event-max-participants').value = data.max_participants || 0;
+    document.getElementById('edit-event-status').value = data.status || 'upcoming';
+
+    document.getElementById('edit-event-form').style.display = 'block';
+    responseDiv.textContent = '';
+  } catch (err) {
+    responseDiv.textContent = '❌ ' + err.message;
+    document.getElementById('edit-event-form').style.display = 'none';
+  }
+}
+
+function formatDateTime(dateString) {
+  if (!dateString) return '';
+  const dt = new Date(dateString);
+  const offset = dt.getTimezoneOffset();
+  const localDate = new Date(dt.getTime() - offset * 60000);
+  return localDate.toISOString().slice(0, 16);
+}
+
+async function HandleEditEvent() {
+  const eventId = document.getElementById('edit-event-id').value;
+
+  const payload = {
+    title: document.getElementById('edit-event-title').value,
+    description: document.getElementById('edit-event-description').value,
+    detailed_description: document.getElementById('edit-event-detailed-description').value,
+    rules: document.getElementById('edit-event-rules').value,
+    event_type: document.getElementById('edit-event-type').value,
+    poster_url: document.getElementById('edit-event-poster-url').value,
+    banner_url: document.getElementById('edit-event-banner-url').value,
+    start_date: document.getElementById('edit-event-start-date').value,
+    end_date: document.getElementById('edit-event-end-date').value,
+    registration_deadline: document.getElementById('edit-event-registration-deadline').value,
+    max_participants: parseInt(document.getElementById('edit-event-max-participants').value),
+    status: document.getElementById('edit-event-status').value
+  };
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/events/${eventId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${currentToken}` // Add if needed
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const result = await res.json();
+    document.getElementById('edit-event-response').textContent = JSON.stringify(result, null, 2);
+  } catch (err) {
+    document.getElementById('edit-event-response').textContent = '❌ ' + err.message;
+  }
+}
+
+        
+        async function deleteEvent() {
+            try {
+                const eventId = document.getElementById('delete-event-id').value;
+                const result = await makeRequest('DELETE', `/events/${eventId}`);
+                document.getElementById('delete-event-response').textContent = JSON.stringify(result, null, 2);
+            } catch (error) {
+                document.getElementById('delete-event-response').textContent = `Error: ${error.message}`;
+            }
+        }
+        
+        // Participant functions
+        async function registerForEvent() {
+            try {
+                const eventId = document.getElementById('register-event-id').value;
+                let registrationData = {};
+                
+                try {
+                    registrationData = JSON.parse(document.getElementById('register-data').value || '{}');
+                } catch (e) {
+                    throw new Error('Invalid JSON in registration data');
+                }
+                
+                const result = await makeRequest('POST', `/events/${eventId}/register`, { registration_data: registrationData });
+                document.getElementById('register-for-event-response').textContent = JSON.stringify(result, null, 2);
+            } catch (error) {
+                document.getElementById('register-for-event-response').textContent = `Error: ${error.message}`;
+            }
+        }
+        
+        async function getEventParticipants() {
+            try {
+                const eventId = document.getElementById('participants-event-id').value;
+                const result = await makeRequest('GET', `/events/${eventId}/participants`);
+                document.getElementById('event-participants-response').textContent = JSON.stringify(result, null, 2);
+            } catch (error) {
+                document.getElementById('event-participants-response').textContent = `Error: ${error.message}`;
+            }
+        }
+        
+        // Result functions
+        async function getEventResults() {
+            try {
+                const eventId = document.getElementById('results-event-id').value;
+                const result = await makeRequest('GET', `/events/${eventId}/results`);
+                document.getElementById('event-results-response').textContent = JSON.stringify(result, null, 2);
+            } catch (error) {
+                document.getElementById('event-results-response').textContent = `Error: ${error.message}`;
+            }
+        }
+        
+        async function addUpdateResult() {
+            try {
+                const eventId = document.getElementById('result-event-id').value;
+                const participantId = document.getElementById('result-participant-id').value;
+                const score = document.getElementById('result-score').value;
+                const rank = document.getElementById('result-rank').value;
+                const remarks = document.getElementById('result-remarks').value;
+                
+                const data = {
+                    participant_id: participantId,
+                    score: parseInt(score),
+                    rank: parseInt(rank),
+                    remarks
+                };
+                
+                const result = await makeRequest('POST', `/events/${eventId}/results`, data);
+                document.getElementById('add-result-response').textContent = JSON.stringify(result, null, 2);
+            } catch (error) {
+                document.getElementById('add-result-response').textContent = `Error: ${error.message}`;
+            }
+        }
+        
+        async function getResultsTemplate() {
+            try {
+                const eventId = document.getElementById('template-event-id').value;
+                const response = await fetch(`${API_BASE_URL}/events/${eventId}/results/template`, {
+                    headers: {
+                        'Authorization': `Bearer ${currentToken}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to download template');
+                }
+                
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `results_template_${eventId}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        }
+        
+        async function uploadResultsCSV() {
+            try {
+                const eventId = document.getElementById('csv-event-id').value;
+                const fileInput = document.getElementById('csv-file');
+                
+                if (!fileInput.files.length) {
+                    throw new Error('Please select a CSV file');
+                }
+                
+                const file = fileInput.files[0];
+                const base64Data = await fileToBase64(file);
+                
+                const data = {
+                    file_name: file.name,
+                    file_data: base64Data
+                };
+                
+                const result = await makeRequest('POST', `/events/${eventId}/results/upload`, data);
+                document.getElementById('upload-csv-response').textContent = JSON.stringify(result, null, 2);
+            } catch (error) {
+                document.getElementById('upload-csv-response').textContent = `Error: ${error.message}`;
+            }
+        }
+        
+        // Certificate functions
+        async function getMyCertificates() {
+            try {
+                const result = await makeRequest('GET', '/certificates');
+                document.getElementById('my-certificates-response').textContent = JSON.stringify(result, null, 2);
+            } catch (error) {
+                document.getElementById('my-certificates-response').textContent = `Error: ${error.message}`;
+            }
+        }
+        
+        async function getCertificateByCode() {
+            try {
+                const code = document.getElementById('certificate-code').value;
+                const result = await makeRequest('GET', `/certificates/${code}`);
+                document.getElementById('certificate-by-code-response').textContent = JSON.stringify(result, null, 2);
+            } catch (error) {
+                document.getElementById('certificate-by-code-response').textContent = `Error: ${error.message}`;
+            }
+        }
+        
+        async function uploadCertificate() {
+            try {
+                const eventId = document.getElementById('cert-event-id').value;
+                const participantId = document.getElementById('cert-participant-id').value;
+                const fileInput = document.getElementById('cert-file');
+                
+                if (!fileInput.files.length) {
+                    throw new Error('Please select a PDF file');
+                }
+                
+                const file = fileInput.files[0];
+                const base64Data = await fileToBase64(file);
+                
+                const data = {
+                    participant_id: participantId,
+                    pdf_base64: base64Data,
+                    file_name: file.name
+                };
+                
+                const result = await makeRequest('POST', `/events/${eventId}/certificates`, data);
+                document.getElementById('upload-certificate-response').textContent = JSON.stringify(result, null, 2);
+            } catch (error) {
+                document.getElementById('upload-certificate-response').textContent = `Error: ${error.message}`;
+            }
+        }
+        
+        // Gallery functions
+        async function getEventGallery() {
+            try {
+                const eventId = document.getElementById('gallery-event-id').value;
+                const result = await makeRequest('GET', `/events/${eventId}/gallery`);
+                document.getElementById('event-gallery-response').textContent = JSON.stringify(result, null, 2);
+            } catch (error) {
+                document.getElementById('event-gallery-response').textContent = `Error: ${error.message}`;
+            }
+        }
+      async function uploadGalleryImage() {
+    try {
+        console.log('Starting image upload...');
+
+        const eventId = document.getElementById('gallery-upload-event-id').value;
+        const caption = document.getElementById('gallery-caption').value;
+        const fileInput = document.getElementById('gallery-image');
+
+        if (!fileInput.files.length) {
+            throw new Error('Please select an image file');
+        }
+
+        const file = fileInput.files[0];
+        console.log('Selected file:', file.name, file.type, file.size);
+
+        const formData = new FormData();
+        formData.append('image', file);
+        formData.append('file_name', file.name);
+        formData.append('caption', caption);
+
+      const response = await fetch(`${API_BASE_URL}/events/${eventId}/gallery`, {
+    method: 'POST',
+    headers: {
+        'Authorization': `Bearer ${currentToken}`
+        // Don't set Content-Type - let the browser handle it for FormData
+    },
+    body: formData,
+});
+
+        const result = await response.json();
+
+        if (!response.ok) throw new Error(result.error || 'Unknown upload error');
+
+        console.log('Upload successful:', result);
+        document.getElementById('upload-gallery-response').textContent = JSON.stringify(result, null, 2);
+    } catch (error) {
+        console.error('Upload failed:', error);
+        document.getElementById('upload-gallery-response').textContent = `Error: ${error.message}`;
+    }
+}
+        
+        // Profile functions
+        async function getMyProfile() {
+            try {
+                const result = await makeRequest('GET', '/profile');
+                document.getElementById('my-profile-response').textContent = JSON.stringify(result, null, 2);
+            } catch (error) {
+                document.getElementById('my-profile-response').textContent = `Error: ${error.message}`;
+            }
+        }
+        
+       
+        
+        async function getMyEvents() {
+            try {
+                const result = await makeRequest('GET', '/profile/events');
+                document.getElementById('my-events-response').textContent = JSON.stringify(result, null, 2);
+            } catch (error) {
+                document.getElementById('my-events-response').textContent = `Error: ${error.message}`;
+            }
+        }
+    </script>
+</body>
+</html>
