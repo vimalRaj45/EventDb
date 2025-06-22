@@ -4,581 +4,719 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Event Management API Tester</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            line-height: 1.6;
-            margin: 0;
-            padding: 20px;
-            background-color: #f5f5f5;
-        }
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-        }
-        h1, h2 {
-            color: #333;
-        }
-        .section {
-            margin-bottom: 30px;
-            padding: 15px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            background-color: #f9f9f9;
-        }
-        .endpoint {
-            margin-bottom: 20px;
-            padding: 15px;
-            border: 1px solid #eee;
-            border-radius: 5px;
-            background-color: white;
-        }
-        .form-group {
-            margin-bottom: 15px;
-        }
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-        }
-        input, select, textarea {
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            box-sizing: border-box;
-        }
-        button {
-            background-color: #4CAF50;
-            color: white;
-            padding: 10px 15px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            margin-right: 10px;
-        }
-        button:hover {
-            background-color: #45a049;
-        }
-        .response {
-            margin-top: 15px;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            background-color: #f0f0f0;
-            white-space: pre-wrap;
-            max-height: 300px;
-            overflow-y: auto;
+        .json-editor {
+            font-family: monospace;
+            min-height: 100px;
         }
         .token-display {
             word-break: break-all;
-            background-color: #f0f0f0;
+            background-color: #f8f9fa;
             padding: 10px;
             border-radius: 4px;
-            margin-bottom: 15px;
+            font-size: 0.85rem;
         }
-        .tab {
-            overflow: hidden;
-            border: 1px solid #ccc;
-            background-color: #f1f1f1;
-            border-radius: 5px 5px 0 0;
+        .response-area {
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            padding: 10px;
+            font-size: 0.85rem;
         }
-        .tab button {
-            background-color: inherit;
-            float: left;
-            border: none;
-            outline: none;
-            cursor: pointer;
-            padding: 14px 16px;
-            transition: 0.3s;
-            color: black;
+        .nav-tabs .nav-link {
+            color: #495057;
+            font-weight: 500;
         }
-        .tab button:hover {
-            background-color: #ddd;
+        .nav-tabs .nav-link.active {
+            font-weight: 600;
         }
-        .tab button.active {
-            background-color: #4CAF50;
-            color: white;
+        .endpoint-card {
+            margin-bottom: 20px;
+            border-left: 4px solid #0d6efd;
         }
-        .tabcontent {
-            display: none;
-            padding: 15px;
-            border: 1px solid #ccc;
-            border-top: none;
-            border-radius: 0 0 5px 5px;
-        }
-        .file-input {
-            margin-bottom: 10px;
-        }
-        .json-editor {
-            width: 100%;
-            min-height: 100px;
-            font-family: monospace;
+        .endpoint-card .card-header {
+            background-color: #f8f9fa;
+            font-weight: 600;
         }
     </style>
 </head>
-<body>
-    <div class="container">
-        <h1>Event Management API Tester</h1>
-        
-        <div class="tab">
-            <button class="tablinks active" onclick="openTab(event, 'Auth')">Authentication</button>
-            <button class="tablinks" onclick="openTab(event, 'Events')">Events</button>
-            <button class="tablinks" onclick="openTab(event, 'Participants')">Participants</button>
-            <button class="tablinks" onclick="openTab(event, 'Results')">Results</button>
-            <button class="tablinks" onclick="openTab(event, 'Certificates')">Certificates</button>
-            <button class="tablinks" onclick="openTab(event, 'Gallery')">Gallery</button>
-            <button class="tablinks" onclick="openTab(event, 'Profile')">Profile</button>
-        </div>
-
-        <!-- Authentication Tab -->
-        <div id="Auth" class="tabcontent" style="display: block;">
-            <div class="section">
-                <h2>Authentication</h2>
+<body class="bg-light">
+    <div class="container py-4">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h1 class="h4 mb-0"><i class="bi bi-calendar-event me-2"></i>Event Management API Tester</h1>
+            </div>
+            
+            <div class="card-body">
+                <ul class="nav nav-tabs mb-4" id="apiTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="auth-tab" data-bs-toggle="tab" data-bs-target="#auth" type="button" role="tab">
+                            <i class="bi bi-shield-lock me-1"></i>Authentication
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="events-tab" data-bs-toggle="tab" data-bs-target="#events" type="button" role="tab">
+                            <i class="bi bi-calendar3 me-1"></i>Events
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="participants-tab" data-bs-toggle="tab" data-bs-target="#participants" type="button" role="tab">
+                            <i class="bi bi-people me-1"></i>Participants
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="results-tab" data-bs-toggle="tab" data-bs-target="#results" type="button" role="tab">
+                            <i class="bi bi-trophy me-1"></i>Results
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="certificates-tab" data-bs-toggle="tab" data-bs-target="#certificates" type="button" role="tab">
+                            <i class="bi bi-award me-1"></i>Certificates
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="gallery-tab" data-bs-toggle="tab" data-bs-target="#gallery" type="button" role="tab">
+                            <i class="bi bi-images me-1"></i>Gallery
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="profile-tab" data-bs-toggle="tab" data-bs-target="#profile" type="button" role="tab">
+                            <i class="bi bi-person me-1"></i>Profile
+                        </button>
+                    </li>
+                </ul>
                 
-                <div class="endpoint">
-                    <h3>Register User</h3>
-                    <div class="form-group">
-                        <label for="register-name">Name:</label>
-                        <input type="text" id="register-name" placeholder="John Doe">
+                <div class="tab-content" id="apiTabsContent">
+                    <!-- Authentication Tab -->
+                    <div class="tab-pane fade show active" id="auth" role="tabpanel">
+                        <div class="card endpoint-card">
+                            <div class="card-header">Register User</div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label for="register-name" class="form-label">Name</label>
+                                    <input type="text" class="form-control" id="register-name" placeholder="John Doe">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="register-email" class="form-label">Email</label>
+                                    <input type="email" class="form-control" id="register-email" placeholder="john@example.com">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="register-email" class="form-label">Contact</label>
+                                    <input type="text" id="register-contact" class="form-control" placeholder="Contact Number" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="register-password" class="form-label">Password</label>
+                                    <input type="password" class="form-control" id="register-password" placeholder="Password">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="register-role" class="form-label">Role</label>
+                                    <select class="form-select" id="register-role">
+                                        <option value="participant">Participant</option>
+                                        <option value="admin">Admin</option>
+                                    </select>
+                                </div>
+                                <button class="btn btn-primary" onclick="registerUser()">
+                                    <i class="bi bi-person-plus me-1"></i>Register
+                                </button>
+                                <div class="mt-3">
+                                    <label class="form-label">Response</label>
+                                    <div class="response-area" id="register-response"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card endpoint-card">
+                            <div class="card-header">Login User</div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label for="login-email" class="form-label">Email</label>
+                                    <input type="email" class="form-control" id="login-email" placeholder="john@example.com">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="login-password" class="form-label">Password</label>
+                                    <input type="password" class="form-control" id="login-password" placeholder="Password">
+                                </div>
+                                <button class="btn btn-primary" onclick="loginUser()">
+                                    <i class="bi bi-box-arrow-in-right me-1"></i>Login
+                                </button>
+                                <div class="mt-3">
+                                    <label class="form-label">Response</label>
+                                    <div class="response-area" id="login-response"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card endpoint-card">
+                            <div class="card-header">Current Token</div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label class="form-label">JWT Token</label>
+                                    <div class="token-display" id="current-token">No token set</div>
+                                </div>
+                                <button class="btn btn-danger" onclick="clearToken()">
+                                    <i class="bi bi-trash me-1"></i>Clear Token
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label for="register-email">Email:</label>
-                        <input type="email" id="register-email" placeholder="john@example.com">
+                    
+                    <!-- Events Tab -->
+                    <div class="tab-pane fade" id="events" role="tabpanel">
+                        <div class="card endpoint-card">
+                            <div class="card-header">Get All Events</div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label for="event-status" class="form-label">Filter by Status</label>
+                                    <select class="form-select" id="event-status">
+                                        <option value="">All</option>
+                                        <option value="upcoming">Upcoming</option>
+                                        <option value="ongoing">Ongoing</option>
+                                        <option value="completed">Completed</option>
+                                        <option value="cancelled">Cancelled</option>
+                                    </select>
+                                </div>
+                                <button class="btn btn-primary" onclick="getAllEvents()">
+                                    <i class="bi bi-list-ul me-1"></i>Get Events
+                                </button>
+                                <div class="mt-3">
+                                    <label class="form-label">Response</label>
+                                    <div class="response-area" id="get-events-response"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card endpoint-card">
+                            <div class="card-header">Get Single Event</div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label for="get-event-id" class="form-label">Event ID</label>
+                                    <input type="text" class="form-control" id="get-event-id" placeholder="1">
+                                </div>
+                                <button class="btn btn-primary" onclick="getSingleEvent()">
+                                    <i class="bi bi-calendar-event me-1"></i>Get Event
+                                </button>
+                                <div class="mt-3">
+                                    <label class="form-label">Response</label>
+                                    <div class="response-area" id="get-single-event-response"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card endpoint-card">
+                            <div class="card-header">Create Event (Admin Only)</div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="event-title" class="form-label">Title</label>
+                                        <input type="text" class="form-control" id="event-title" placeholder="Annual Quiz Competition">
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="event-type" class="form-label">Event Type</label>
+                                        <select class="form-select" id="event-type">
+                                            <option value="quiz">Quiz</option>
+                                            <option value="webinar">Webinar</option>
+                                            <option value="essay">Essay</option>
+                                            <option value="workshop">Workshop</option>
+                                            <option value="competition">Competition</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="event-description" class="form-label">Description</label>
+                                    <textarea class="form-control" id="event-description" rows="2" placeholder="Short description"></textarea>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="event-detailed-description" class="form-label">Detailed Description</label>
+                                    <textarea class="form-control" id="event-detailed-description" rows="3" placeholder="Detailed description"></textarea>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="event-rules" class="form-label">Rules</label>
+                                    <textarea class="form-control" id="event-rules" rows="3" placeholder="Event rules"></textarea>
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="event-poster-url" class="form-label">Poster URL</label>
+                                        <input type="text" class="form-control" id="event-poster-url" placeholder="https://example.com/poster.jpg">
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="event-banner-url" class="form-label">Banner URL</label>
+                                        <input type="text" class="form-control" id="event-banner-url" placeholder="https://example.com/banner.jpg">
+                                    </div>
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-md-4 mb-3">
+                                        <label for="event-start-date" class="form-label">Start Date</label>
+                                        <input type="datetime-local" class="form-control" id="event-start-date">
+                                    </div>
+                                    <div class="col-md-4 mb-3">
+                                        <label for="event-end-date" class="form-label">End Date</label>
+                                        <input type="datetime-local" class="form-control" id="event-end-date">
+                                    </div>
+                                    <div class="col-md-4 mb-3">
+                                        <label for="event-registration-deadline" class="form-label">Registration Deadline</label>
+                                        <input type="datetime-local" class="form-control" id="event-registration-deadline">
+                                    </div>
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="event-max-participants" class="form-label">Max Participants</label>
+                                        <input type="number" class="form-control" id="event-max-participants" placeholder="100">
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="event-status-create" class="form-label">Status</label>
+                                        <select class="form-select" id="event-status-create">
+                                            <option value="upcoming">Upcoming</option>
+                                            <option value="ongoing">Ongoing</option>
+                                            <option value="completed">Completed</option>
+                                            <option value="cancelled">Cancelled</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                <button class="btn btn-primary" onclick="HandlecreateEvent()">
+                                    <i class="bi bi-plus-circle me-1"></i>Create Event
+                                </button>
+                                <div class="mt-3">
+                                    <label class="form-label">Response</label>
+                                    <div class="response-area" id="create-event-response"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card endpoint-card">
+                            <div class="card-header">Edit Event (Admin Only)</div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label for="edit-event-id" class="form-label">Enter Event ID to Load</label>
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" id="edit-event-id" placeholder="e.g., 12">
+                                        <button class="btn btn-outline-secondary" onclick="loadEventDetails()">
+                                            <i class="bi bi-arrow-down-circle me-1"></i>Load Event
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div id="edit-event-form" style="display: none;">
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label for="edit-event-title" class="form-label">Title</label>
+                                            <input type="text" class="form-control" id="edit-event-title">
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label for="edit-event-type" class="form-label">Event Type</label>
+                                            <select class="form-select" id="edit-event-type">
+                                                <option value="quiz">Quiz</option>
+                                                <option value="webinar">Webinar</option>
+                                                <option value="essay">Essay</option>
+                                                <option value="workshop">Workshop</option>
+                                                <option value="competition">Competition</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="edit-event-description" class="form-label">Description</label>
+                                        <textarea class="form-control" id="edit-event-description" rows="2"></textarea>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="edit-event-detailed-description" class="form-label">Detailed Description</label>
+                                        <textarea class="form-control" id="edit-event-detailed-description" rows="3"></textarea>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="edit-event-rules" class="form-label">Rules</label>
+                                        <textarea class="form-control" id="edit-event-rules" rows="3"></textarea>
+                                    </div>
+                                    
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label for="edit-event-poster-url" class="form-label">Poster URL</label>
+                                            <input type="text" class="form-control" id="edit-event-poster-url">
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label for="edit-event-banner-url" class="form-label">Banner URL</label>
+                                            <input type="text" class="form-control" id="edit-event-banner-url">
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="row">
+                                        <div class="col-md-4 mb-3">
+                                            <label for="edit-event-start-date" class="form-label">Start Date</label>
+                                            <input type="datetime-local" class="form-control" id="edit-event-start-date">
+                                        </div>
+                                        <div class="col-md-4 mb-3">
+                                            <label for="edit-event-end-date" class="form-label">End Date</label>
+                                            <input type="datetime-local" class="form-control" id="edit-event-end-date">
+                                        </div>
+                                        <div class="col-md-4 mb-3">
+                                            <label for="edit-event-registration-deadline" class="form-label">Registration Deadline</label>
+                                            <input type="datetime-local" class="form-control" id="edit-event-registration-deadline">
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label for="edit-event-max-participants" class="form-label">Max Participants</label>
+                                            <input type="number" class="form-control" id="edit-event-max-participants">
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label for="edit-event-status" class="form-label">Status</label>
+                                            <select class="form-select" id="edit-event-status">
+                                                <option value="upcoming">Upcoming</option>
+                                                <option value="ongoing">Ongoing</option>
+                                                <option value="completed">Completed</option>
+                                                <option value="cancelled">Cancelled</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    <button class="btn btn-primary" onclick="HandleEditEvent()">
+                                        <i class="bi bi-save me-1"></i>Update Event
+                                    </button>
+                                </div>
+                                
+                                <div class="mt-3">
+                                    <label class="form-label">Response</label>
+                                    <div class="response-area" id="edit-event-response"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card endpoint-card">
+                            <div class="card-header">Delete Event (Admin Only)</div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label for="delete-event-id" class="form-label">Event ID</label>
+                                    <input type="text" class="form-control" id="delete-event-id" placeholder="1">
+                                </div>
+                                <button class="btn btn-danger" onclick="deleteEvent()">
+                                    <i class="bi bi-trash me-1"></i>Delete Event
+                                </button>
+                                <div class="mt-3">
+                                    <label class="form-label">Response</label>
+                                    <div class="response-area" id="delete-event-response"></div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label for="register-password">Password:</label>
-                        <input type="password" id="register-password" placeholder="Password">
+                    
+                    <!-- Participants Tab -->
+                    <div class="tab-pane fade" id="participants" role="tabpanel">
+                        <div class="card endpoint-card">
+                            <div class="card-header">Register for Event</div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label for="register-event-id" class="form-label">Event ID</label>
+                                    <input type="text" class="form-control" id="register-event-id" placeholder="1">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="register-data" class="form-label">Registration Data (JSON)</label>
+                                    <textarea class="form-control json-editor" id="register-data" placeholder='{"team_name": "Team A", "members": 3}'>{"team_name": "Team A"}</textarea>
+                                </div>
+                                <button class="btn btn-primary" onclick="registerForEvent()">
+                                    <i class="bi bi-person-plus me-1"></i>Register
+                                </button>
+                                <div class="mt-3">
+                                    <label class="form-label">Response</label>
+                                    <div class="response-area" id="register-for-event-response"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card endpoint-card">
+                            <div class="card-header">Get Event Participants (Admin Only)</div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label for="participants-event-id" class="form-label">Event ID</label>
+                                    <input type="text" class="form-control" id="participants-event-id" placeholder="1">
+                                </div>
+                                <button class="btn btn-primary" onclick="getEventParticipants()">
+                                    <i class="bi bi-people me-1"></i>Get Participants
+                                </button>
+                                <div class="mt-3">
+                                    <label class="form-label">Response</label>
+                                    <div class="response-area" id="event-participants-response"></div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label for="register-role">Role:</label>
-                        <select id="register-role">
-                            <option value="participant">Participant</option>
-                            <option value="admin">Admin</option>
-                        </select>
+                    
+                    <!-- Results Tab -->
+                    <div class="tab-pane fade" id="results" role="tabpanel">
+                        <div class="card endpoint-card">
+                            <div class="card-header">Get Event Results</div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label for="results-event-id" class="form-label">Event ID</label>
+                                    <input type="text" class="form-control" id="results-event-id" placeholder="1">
+                                </div>
+                                <button class="btn btn-primary" onclick="getEventResults()">
+                                    <i class="bi bi-trophy me-1"></i>Get Results
+                                </button>
+                                <div class="mt-3">
+                                    <label class="form-label">Response</label>
+                                    <div class="response-area" id="event-results-response"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card endpoint-card">
+                            <div class="card-header">Add/Update Result (Admin Only)</div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="result-event-id" class="form-label">Event ID</label>
+                                        <input type="text" class="form-control" id="result-event-id" placeholder="1">
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="result-participant-id" class="form-label">Participant ID</label>
+                                        <input type="text" class="form-control" id="result-participant-id" placeholder="1">
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-4 mb-3">
+                                        <label for="result-score" class="form-label">Score</label>
+                                        <input type="number" class="form-control" id="result-score" placeholder="85">
+                                    </div>
+                                    <div class="col-md-4 mb-3">
+                                        <label for="result-rank" class="form-label">Rank</label>
+                                        <input type="number" class="form-control" id="result-rank" placeholder="1">
+                                    </div>
+                                    <div class="col-md-4 mb-3">
+                                        <label for="result-remarks" class="form-label">Remarks</label>
+                                        <input type="text" class="form-control" id="result-remarks" placeholder="Excellent performance">
+                                    </div>
+                                </div>
+                                <button class="btn btn-primary" onclick="addUpdateResult()">
+                                    <i class="bi bi-save me-1"></i>Add/Update Result
+                                </button>
+                                <div class="mt-3">
+                                    <label class="form-label">Response</label>
+                                    <div class="response-area" id="add-result-response"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card endpoint-card">
+                            <div class="card-header">Get Results Template (Admin Only)</div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label for="template-event-id" class="form-label">Event ID</label>
+                                    <input type="text" class="form-control" id="template-event-id" placeholder="1">
+                                </div>
+                                <button class="btn btn-primary" onclick="getResultsTemplate()">
+                                    <i class="bi bi-download me-1"></i>Download Template
+                                </button>
+                                <div class="mt-2 text-muted">
+                                    <small>CSV format: email,score,rank,remarks</small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card endpoint-card">
+                            <div class="card-header">Upload Results CSV (Admin Only)</div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label for="csv-event-id" class="form-label">Event ID</label>
+                                    <input type="text" class="form-control" id="csv-event-id" placeholder="1">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="csv-file" class="form-label">CSV File</label>
+                                    <input type="file" class="form-control" id="csv-file" accept=".csv">
+                                </div>
+                                <button class="btn btn-primary" onclick="uploadResultsCSV()">
+                                    <i class="bi bi-upload me-1"></i>Upload CSV
+                                </button>
+                                <div class="mt-3">
+                                    <label class="form-label">Response</label>
+                                    <div class="response-area" id="upload-csv-response"></div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <button onclick="registerUser()">Register</button>
-                    <div class="response" id="register-response"></div>
-                </div>
-                
-                <div class="endpoint">
-                    <h3>Login User</h3>
-                    <div class="form-group">
-                        <label for="login-email">Email:</label>
-                        <input type="email" id="login-email" placeholder="john@example.com">
+                    
+                    <!-- Certificates Tab -->
+                    <div class="tab-pane fade" id="certificates" role="tabpanel">
+                        <div class="card endpoint-card">
+                            <div class="card-header">Get My Certificates</div>
+                            <div class="card-body">
+                                <button class="btn btn-primary" onclick="getMyCertificates()">
+                                    <i class="bi bi-award me-1"></i>Get Certificates
+                                </button>
+                                <div class="mt-3">
+                                    <label class="form-label">Response</label>
+                                    <div class="response-area" id="my-certificates-response"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card endpoint-card">
+                            <div class="card-header">Get Certificate by Code</div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label for="certificate-code" class="form-label">Certificate Code</label>
+                                    <input type="text" class="form-control" id="certificate-code" placeholder="abc123">
+                                </div>
+                                <button class="btn btn-primary" onclick="getCertificateByCode()">
+                                    <i class="bi bi-search me-1"></i>Get Certificate
+                                </button>
+                                <div class="mt-3">
+                                    <label class="form-label">Response</label>
+                                    <div class="response-area" id="certificate-by-code-response"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card endpoint-card">
+                            <div class="card-header">Upload Certificate (Admin Only)</div>
+                            <div class="card-body">
+                                <input type="text" id="cert-event-id" placeholder="Event ID" class="form-control">
+                                <input type="text" id="cert-participant-id" placeholder="Participant ID" class="form-control">
+                                <input type="text" id="cert-sheet-id" placeholder="Google Sheet ID" class="form-control">
+                                <input type="text" id="cert-template-id" placeholder="Slide Template ID" class="form-control">
+                                <input type="text" id="cert-folder-id" placeholder="Drive Folder ID" class="form-control">
+                                <input type="email" id="cert-email" class="form-control" readonly>
+                                <button onclick="uploadCertificate()" class="btn btn-success mt-2">🚀 Generate & Upload Certificate</button>
+                                <div class="mt-3">
+                                    <label class="form-label">Response</label>
+                                    <div class="response-area" id="upload-certificate-response"></div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label for="login-password">Password:</label>
-                        <input type="password" id="login-password" placeholder="Password">
+                    
+                    <!-- Gallery Tab -->
+                    <div class="tab-pane fade" id="gallery" role="tabpanel">
+                        <div class="card endpoint-card">
+                            <div class="card-header">Get Event Gallery</div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label for="gallery-event-id" class="form-label">Event ID</label>
+                                    <input type="text" class="form-control" id="gallery-event-id" placeholder="1">
+                                </div>
+                                <button class="btn btn-primary" onclick="getEventGallery()">
+                                    <i class="bi bi-images me-1"></i>Get Gallery
+                                </button>
+                                <div class="mt-3">
+                                    <label class="form-label">Response</label>
+                                    <div class="response-area" id="event-gallery-response"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card endpoint-card">
+                            <div class="card-header">Upload Gallery Image (Admin Only)</div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label for="gallery-upload-event-id" class="form-label">Event ID</label>
+                                    <input type="text" class="form-control" id="gallery-upload-event-id" placeholder="1">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="gallery-image" class="form-label">Image</label>
+                                    <input type="file" class="form-control" id="gallery-image" accept="image/*">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="gallery-caption" class="form-label">Caption</label>
+                                    <input type="text" class="form-control" id="gallery-caption" placeholder="Event photo">
+                                </div>
+                                <button class="btn btn-primary" onclick="uploadGalleryImage()">
+                                    <i class="bi bi-upload me-1"></i>Upload Image
+                                </button>
+                                <div class="mt-3">
+                                    <label class="form-label">Response</label>
+                                    <div class="response-area" id="upload-gallery-response"></div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <button onclick="loginUser()">Login</button>
-                    <div class="response" id="login-response"></div>
-                </div>
-                
-                <div class="endpoint">
-                    <h3>Current Token</h3>
-                    <div class="token-display" id="current-token">No token set</div>
-                    <button onclick="clearToken()">Clear Token</button>
+                    
+                    <!-- Profile Tab -->
+                    <div class="tab-pane fade" id="profile" role="tabpanel">
+                        <div class="card endpoint-card">
+                            <div class="card-header">Get My Profile</div>
+                            <div class="card-body">
+                                <button class="btn btn-primary" onclick="getMyProfile()">
+                                    <i class="bi bi-person me-1"></i>Get Profile
+                                </button>
+                                <div class="mt-3">
+                                    <label class="form-label">Response</label>
+                                    <div class="response-area" id="my-profile-response"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card endpoint-card">
+                            <div class="card-header">Get My Events</div>
+                            <div class="card-body">
+                                <button class="btn btn-primary" onclick="getMyEvents()">
+                                    <i class="bi bi-calendar3 me-1"></i>Get My Events
+                                </button>
+                                <div class="mt-3">
+                                    <label class="form-label">Response</label>
+                                    <div class="response-area" id="my-events-response"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
-        </div>
-
-        <!-- Events Tab -->
-        <div id="Events" class="tabcontent">
-            <div class="section">
-                <h2>Events</h2>
-                
-                <div class="endpoint">
-                    <h3>Get All Events</h3>
-                    <div class="form-group">
-                        <label for="event-status">Filter by Status:</label>
-                        <select id="event-status">
-                            <option value="">All</option>
-                            <option value="upcoming">Upcoming</option>
-                            <option value="ongoing">Ongoing</option>
-                            <option value="completed">Completed</option>
-                            <option value="cancelled">Cancelled</option>
-                        </select>
-                    </div>
-                    <button onclick="getAllEvents()">Get Events</button>
-                    <div class="response" id="get-events-response"></div>
+            
+            <div class="container mt-5">
+                <h2 class="mb-4"><i class="bi bi-person-circle"></i> Update My Profile</h2>
+                <div id="loading-text" class="text-success fw-semibold mb-3"></div>
+                <div class="mb-3">
+                    <label for="my-email" class="form-label">Email (read-only)</label>
+                    <input type="email" class="form-control" id="my-email" readonly>
                 </div>
-                
-                <div class="endpoint">
-                    <h3>Get Single Event</h3>
-                    <div class="form-group">
-                        <label for="get-event-id">Event ID:</label>
-                        <input type="text" id="get-event-id" placeholder="1">
-                    </div>
-                    <button onclick="getSingleEvent()">Get Event</button>
-                    <div class="response" id="get-single-event-response"></div>
+                <div class="mb-3">
+                    <label for="my-name" class="form-label">Name</label>
+                    <input type="text" class="form-control" id="my-name">
                 </div>
-                
-                <div class="endpoint">
-                    <h3>Create Event (Admin Only)</h3>
-                    <div class="form-group">
-                        <label for="event-title">Title:</label>
-                        <input type="text" id="event-title" placeholder="Annual Quiz Competition">
-                    </div>
-                    <div class="form-group">
-                        <label for="event-description">Description:</label>
-                        <textarea id="event-description" placeholder="Short description"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label for="event-detailed-description">Detailed Description:</label>
-                        <textarea id="event-detailed-description" placeholder="Detailed description"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label for="event-rules">Rules:</label>
-                        <textarea id="event-rules" placeholder="Event rules"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label for="event-type">Event Type:</label>
-                        <select id="event-type">
-                            <option value="quiz">Quiz</option>
-                            <option value="webinar">Webinar</option>
-                            <option value="essay">Essay</option>
-                            <option value="workshop">Workshop</option>
-                            <option value="competition">Competition</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="event-poster-url">Poster URL:</label>
-                        <input type="text" id="event-poster-url" placeholder="https://example.com/poster.jpg">
-                    </div>
-                    <div class="form-group">
-                        <label for="event-banner-url">Banner URL:</label>
-                        <input type="text" id="event-banner-url" placeholder="https://example.com/banner.jpg">
-                    </div>
-                    <div class="form-group">
-                        <label for="event-start-date">Start Date:</label>
-                        <input type="datetime-local" id="event-start-date">
-                    </div>
-                    <div class="form-group">
-                        <label for="event-end-date">End Date:</label>
-                        <input type="datetime-local" id="event-end-date">
-                    </div>
-                    <div class="form-group">
-                        <label for="event-registration-deadline">Registration Deadline:</label>
-                        <input type="datetime-local" id="event-registration-deadline">
-                    </div>
-                    <div class="form-group">
-                        <label for="event-max-participants">Max Participants:</label>
-                        <input type="number" id="event-max-participants" placeholder="100">
-                    </div>
-                    <div class="form-group">
-                        <label for="event-status-create">Status:</label>
-                        <select id="event-status-create">
-                            <option value="upcoming">Upcoming</option>
-                            <option value="ongoing">Ongoing</option>
-                            <option value="completed">Completed</option>
-                            <option value="cancelled">Cancelled</option>
-                        </select>
-                    </div>
-                    <button onclick="HandlecreateEvent()">Create Event</button>
-                    <div class="response" id="create-event-response"></div>
+                <div class="mb-3">
+                    <label for="my-contact" class="form-label">Contact Number</label>
+                    <input type="text" class="form-control" id="my-contact">
                 </div>
-                
-  <div class="endpoint">
-  <h3>Edit Event (Admin Only)</h3>
-
-  <!-- Search by ID -->
-  <div class="form-group">
-    <label for="edit-event-id">Enter Event ID to Load:</label>
-    <input type="text" id="edit-event-id" placeholder="e.g., 12">
-    <button onclick="loadEventDetails()">Load Event</button>
-  </div>
-
-  <!-- Editable Form -->
-  <div id="edit-event-form" style="display: none;">
-    <div class="form-group">
-      <label for="edit-event-title">Title:</label>
-      <input type="text" id="edit-event-title">
-    </div>
-
-    <div class="form-group">
-      <label for="edit-event-description">Description:</label>
-      <textarea id="edit-event-description"></textarea>
-    </div>
-
-    <div class="form-group">
-      <label for="edit-event-detailed-description">Detailed Description:</label>
-      <textarea id="edit-event-detailed-description"></textarea>
-    </div>
-
-    <div class="form-group">
-      <label for="edit-event-rules">Rules:</label>
-      <textarea id="edit-event-rules"></textarea>
-    </div>
-
-    <div class="form-group">
-      <label for="edit-event-type">Event Type:</label>
-      <select id="edit-event-type">
-        <option value="quiz">Quiz</option>
-        <option value="webinar">Webinar</option>
-        <option value="essay">Essay</option>
-        <option value="workshop">Workshop</option>
-        <option value="competition">Competition</option>
-      </select>
-    </div>
-
-    <div class="form-group">
-      <label for="edit-event-poster-url">Poster URL:</label>
-      <input type="text" id="edit-event-poster-url">
-    </div>
-
-    <div class="form-group">
-      <label for="edit-event-banner-url">Banner URL:</label>
-      <input type="text" id="edit-event-banner-url">
-    </div>
-
-    <div class="form-group">
-      <label for="edit-event-start-date">Start Date:</label>
-      <input type="datetime-local" id="edit-event-start-date">
-    </div>
-
-    <div class="form-group">
-      <label for="edit-event-end-date">End Date:</label>
-      <input type="datetime-local" id="edit-event-end-date">
-    </div>
-
-    <div class="form-group">
-      <label for="edit-event-registration-deadline">Registration Deadline:</label>
-      <input type="datetime-local" id="edit-event-registration-deadline">
-    </div>
-
-    <div class="form-group">
-      <label for="edit-event-max-participants">Max Participants:</label>
-      <input type="number" id="edit-event-max-participants">
-    </div>
-
-    <div class="form-group">
-      <label for="edit-event-status">Status:</label>
-      <select id="edit-event-status">
-        <option value="upcoming">Upcoming</option>
-        <option value="ongoing">Ongoing</option>
-        <option value="completed">Completed</option>
-        <option value="cancelled">Cancelled</option>
-      </select>
-    </div>
-
-    <button onclick="HandleEditEvent()">Update Event</button>
-  </div>
-
-  <div class="response" id="edit-event-response"></div>
-</div>
-
-                
-                <div class="endpoint">
-                    <h3>Delete Event (Admin Only)</h3>
-                    <div class="form-group">
-                        <label for="delete-event-id">Event ID:</label>
-                        <input type="text" id="delete-event-id" placeholder="1">
-                    </div>
-                    <button onclick="deleteEvent()">Delete Event</button>
-                    <div class="response" id="delete-event-response"></div>
+                <div class="mb-4">
+                    <label for="my-role" class="form-label">Role (optional)</label>
+                    <select id="my-role" class="form-select">
+                        <option value="">(Keep same)</option>
+                        <option value="participant">Participant</option>
+                        <option value="admin">Admin</option>
+                    </select>
                 </div>
+                <button onclick="updateMyProfile()" class="btn btn-primary mb-3">Update Profile</button>
+                <pre id="profile-response" class="bg-white p-3 border rounded"></pre>
+                <hr class="my-5">
+                <h2 class="mb-3 text-danger"><i class="bi bi-trash3"></i> Delete User by Email</h2>
+                <div class="mb-3">
+                    <input type="email" class="form-control" id="delete-email" placeholder="User Email" required>
+                </div>
+                <button onclick="deleteUserByEmail()" class="btn btn-danger">Delete Account</button>
+                <pre id="delete-email-response" class="bg-white p-3 border rounded mt-3"></pre>
             </div>
-        </div>
-
-        <!-- Participants Tab -->
-        <div id="Participants" class="tabcontent">
-            <div class="section">
-                <h2>Participants</h2>
-                
-                <div class="endpoint">
-                    <h3>Register for Event</h3>
-                    <div class="form-group">
-                        <label for="register-event-id">Event ID:</label>
-                        <input type="text" id="register-event-id" placeholder="1">
-                    </div>
-                    <div class="form-group">
-                        <label for="register-data">Registration Data (JSON):</label>
-                        <textarea id="register-data" class="json-editor" placeholder='{"team_name": "Team A", "members": 3}'>{"team_name": "Team A"}</textarea>
-                    </div>
-                    <button onclick="registerForEvent()">Register</button>
-                    <div class="response" id="register-for-event-response"></div>
-                </div>
-                
-                <div class="endpoint">
-                    <h3>Get Event Participants (Admin Only)</h3>
-                    <div class="form-group">
-                        <label for="participants-event-id">Event ID:</label>
-                        <input type="text" id="participants-event-id" placeholder="1">
-                    </div>
-                    <button onclick="getEventParticipants()">Get Participants</button>
-                    <div class="response" id="event-participants-response"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Results Tab -->
-        <div id="Results" class="tabcontent">
-            <div class="section">
-                <h2>Results</h2>
-                
-                <div class="endpoint">
-                    <h3>Get Event Results</h3>
-                    <div class="form-group">
-                        <label for="results-event-id">Event ID:</label>
-                        <input type="text" id="results-event-id" placeholder="1">
-                    </div>
-                    <button onclick="getEventResults()">Get Results</button>
-                    <div class="response" id="event-results-response"></div>
-                </div>
-                
-                <div class="endpoint">
-                    <h3>Add/Update Result (Admin Only)</h3>
-                    <div class="form-group">
-                        <label for="result-event-id">Event ID:</label>
-                        <input type="text" id="result-event-id" placeholder="1">
-                    </div>
-                    <div class="form-group">
-                        <label for="result-participant-id">Participant ID:</label>
-                        <input type="text" id="result-participant-id" placeholder="1">
-                    </div>
-                    <div class="form-group">
-                        <label for="result-score">Score:</label>
-                        <input type="number" id="result-score" placeholder="85">
-                    </div>
-                    <div class="form-group">
-                        <label for="result-rank">Rank:</label>
-                        <input type="number" id="result-rank" placeholder="1">
-                    </div>
-                    <div class="form-group">
-                        <label for="result-remarks">Remarks:</label>
-                        <input type="text" id="result-remarks" placeholder="Excellent performance">
-                    </div>
-                    <button onclick="addUpdateResult()">Add/Update Result</button>
-                    <div class="response" id="add-result-response"></div>
-                </div>
-                
-                <div class="endpoint">
-                    <h3>Get Results Template (Admin Only)</h3>
-                    <div class="form-group">
-                        <label for="template-event-id">Event ID:</label>
-                        <input type="text" id="template-event-id" placeholder="1">
-                    </div>
-                    <button onclick="getResultsTemplate()">Download Template</button>
-                </div>
-                
-                <div class="endpoint">
-                    <h3>Upload Results CSV (Admin Only)</h3>
-                    <div class="form-group">
-                        <label for="csv-event-id">Event ID:</label>
-                        <input type="text" id="csv-event-id" placeholder="1">
-                    </div>
-                    <div class="form-group">
-                        <label for="csv-file">CSV File:</label>
-                        <input type="file" id="csv-file" class="file-input" accept=".csv">
-                        <small>CSV format: email,score,rank,remarks</small>
-                    </div>
-                    <button onclick="uploadResultsCSV()">Upload CSV</button>
-                    <div class="response" id="upload-csv-response"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Certificates Tab -->
-        <div id="Certificates" class="tabcontent">
-            <div class="section">
-                <h2>Certificates</h2>
-                
-                <div class="endpoint">
-                    <h3>Get My Certificates</h3>
-                    <button onclick="getMyCertificates()">Get Certificates</button>
-                    <div class="response" id="my-certificates-response"></div>
-                </div>
-                
-                <div class="endpoint">
-                    <h3>Get Certificate by Code</h3>
-                    <div class="form-group">
-                        <label for="certificate-code">Certificate Code:</label>
-                        <input type="text" id="certificate-code" placeholder="abc123">
-                    </div>
-                    <button onclick="getCertificateByCode()">Get Certificate</button>
-                    <div class="response" id="certificate-by-code-response"></div>
-                </div>
-                
-                <div class="endpoint">
-                    <h3>Upload Certificate (Admin Only)</h3>
-                    <div class="form-group">
-                        <label for="cert-event-id">Event ID:</label>
-                        <input type="text" id="cert-event-id" placeholder="1">
-                    </div>
-                    <div class="form-group">
-                        <label for="cert-participant-id">Participant ID:</label>
-                        <input type="text" id="cert-participant-id" placeholder="1">
-                    </div>
-                    <div class="form-group">
-                        <label for="cert-file">Certificate File (PDF):</label>
-                        <input type="file" id="cert-file" class="file-input" accept=".pdf">
-                    </div>
-                    <button onclick="uploadCertificate()">Upload Certificate</button>
-                    <div class="response" id="upload-certificate-response"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Gallery Tab -->
-        <div id="Gallery" class="tabcontent">
-            <div class="section">
-                <h2>Event Gallery</h2>
-                
-                <div class="endpoint">
-                    <h3>Get Event Gallery</h3>
-                    <div class="form-group">
-                        <label for="gallery-event-id">Event ID:</label>
-                        <input type="text" id="gallery-event-id" placeholder="1">
-                    </div>
-                    <button onclick="getEventGallery()">Get Gallery</button>
-                    <div class="response" id="event-gallery-response"></div>
-                </div>
-                
-                <div class="endpoint">
-                    <h3>Upload Gallery Image (Admin Only)</h3>
-                    <div class="form-group">
-                        <label for="gallery-upload-event-id">Event ID:</label>
-                        <input type="text" id="gallery-upload-event-id" placeholder="1">
-                    </div>
-                    <div class="form-group">
-                        <label for="gallery-image">Image:</label>
-                        <input type="file" id="gallery-image" class="file-input" accept="image/*">
-                    </div>
-                    <div class="form-group">
-                        <label for="gallery-caption">Caption:</label>
-                        <input type="text" id="gallery-caption" placeholder="Event photo">
-                    </div>
-                    <button onclick="uploadGalleryImage()">Upload Image</button>
-                    <div class="response" id="upload-gallery-response"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Profile Tab -->
-        <div id="Profile" class="tabcontent">
-            <div class="section">
-                <h2>User Profile</h2>
-                
-                <div class="endpoint">
-                    <h3>Get My Profile</h3>
-                    <button onclick="getMyProfile()">Get Profile</button>
-                    <div class="response" id="my-profile-response"></div>
-                </div>
-                
-                <div class="endpoint">
-                    <h3>Get My Events</h3>
-                    <button onclick="getMyEvents()">Get My Events</button>
-                    <div class="response" id="my-events-response"></div>
-                </div>
+            
+            <div class="card-footer text-muted small">
+                Event Management API Tester - Powered by Bootstrap 5
             </div>
         </div>
     </div>
 
+    <!-- Bootstrap 5 JS Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
     <script>
         const API_BASE_URL = 'http://localhost:4000/api';
         let currentToken = localStorage.getItem('jwtToken') || '';
@@ -587,21 +725,6 @@
         document.addEventListener('DOMContentLoaded', function() {
             updateTokenDisplay();
         });
-        
-        function openTab(evt, tabName) {
-            const tabcontent = document.getElementsByClassName("tabcontent");
-            for (let i = 0; i < tabcontent.length; i++) {
-                tabcontent[i].style.display = "none";
-            }
-            
-            const tablinks = document.getElementsByClassName("tablinks");
-            for (let i = 0; i < tablinks.length; i++) {
-                tablinks[i].className = tablinks[i].className.replace(" active", "");
-            }
-            
-            document.getElementById(tabName).style.display = "block";
-            evt.currentTarget.className += " active";
-        }
         
         function updateTokenDisplay() {
             document.getElementById('current-token').textContent = currentToken || 'No token set';
@@ -661,40 +784,135 @@
             }
         }
         
-       function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64 = reader.result.split(',')[1]; // remove prefix
-      resolve(base64);
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    const base64 = reader.result.split(',')[1]; // remove prefix
+                    resolve(base64);
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+
+
+        document.getElementById('cert-participant-id').addEventListener('change', async function () {
+  const participantId = this.value;
+  if (!participantId) return;
+
+  try {
+    console.log(`🔍 Fetching email for participant ID: ${participantId}`);
+    const response = await makeRequest('GET', `/participants/${participantId}/email`);
+    const email = response.email;
+    console.log(`📧 Email fetched: ${email}`);
+    document.getElementById('cert-email').value = email;
+  } catch (err) {
+    console.error("❌ Error fetching email:", err.message);
+    document.getElementById('cert-email').value = '';
+    alert('Error fetching email for this participant');
+  }
+});
+
+
+       async function registerUser() {
+  try {
+    const name = document.getElementById('register-name').value;
+    const email = document.getElementById('register-email').value;
+    const password = document.getElementById('register-password').value;
+    const role = document.getElementById('register-role').value;
+    const contact_no = document.getElementById('register-contact').value;  // ✅
+
+    const data = {
+      name,
+      email,
+      password,
+      role,
+      contact_no
     };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+
+    const result = await makeRequest('POST', '/auth/register', data, false);
+    document.getElementById('register-response').textContent = JSON.stringify(result, null, 2);
+  } catch (error) {
+    document.getElementById('register-response').textContent = `Error: ${error.message}`;
+  }
 }
 
-
-        // Authentication functions
-        async function registerUser() {
-            try {
-                const name = document.getElementById('register-name').value;
-                const email = document.getElementById('register-email').value;
-                const password = document.getElementById('register-password').value;
-                const role = document.getElementById('register-role').value;
-                
-                const data = {
-                    name,
-                    email,
-                    password,
-                    role
-                };
-                
-                const result = await makeRequest('POST', '/auth/register', data, false);
-                document.getElementById('register-response').textContent = JSON.stringify(result, null, 2);
-            } catch (error) {
-                document.getElementById('register-response').textContent = `Error: ${error.message}`;
-            }
+ async function makeRequest(method, endpoint, data = null, auth = false) {
+      const options = {
+        method,
+        headers: {
+          'Content-Type': 'application/json'
         }
+      };
+
+      if (auth && currentToken) {
+        options.headers['Authorization'] = `Bearer ${currentToken}`;
+      }
+
+      if (data) {
+        options.body = JSON.stringify(data);
+      }
+
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        throw new Error(responseData.error || 'Request failed');
+      }
+
+      return responseData;
+    }
+
+    async function makeRequest(method, endpoint, data = null) {
+      const options = {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${currentToken}`
+        }
+      };
+      if (data) options.body = JSON.stringify(data);
+      const res = await fetch(`${API_BASE_URL}${endpoint}`, options);
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed request');
+      return result;
+    }
+
+   // ✅ Send PUT to /users/:email
+    async function updateMyProfile() {
+      const email = document.getElementById('my-email').value;
+      const name = document.getElementById('my-name').value;
+      const contact_no = document.getElementById('my-contact').value;
+      const role = document.getElementById('my-role').value || null; // keep same if empty
+
+      const data = { name, contact_no, role };
+
+      try {
+        const result = await makeRequest('PUT', `/users/${email}`, data);
+        document.getElementById('profile-response').textContent = JSON.stringify(result, null, 2);
+      } catch (err) {
+        document.getElementById('profile-response').textContent = `Error: ${err.message}`;
+      }
+    }
+
+    // Auto-load profile on page load
+    window.addEventListener('DOMContentLoaded', getMyProfile);
+
+    async function deleteUserByEmail() {
+      const email = document.getElementById('delete-email').value;
+
+      if (!confirm(`Are you sure you want to delete user ${email}?`)) return;
+
+      try {
+        const result = await makeRequest('DELETE', `/users/${email}`, null, true);
+        document.getElementById('delete-email-response').textContent = result.message;
+      } catch (error) {
+        document.getElementById('delete-email-response').textContent = `Error: ${error.message}`;
+      }
+    }
+
         
         async function loginUser() {
             try {
@@ -768,88 +986,87 @@
             }
         }
         
-     async function loadEventDetails() {
-  const eventId = document.getElementById('edit-event-id').value;
-  const responseDiv = document.getElementById('edit-event-response');
+        async function loadEventDetails() {
+            const eventId = document.getElementById('edit-event-id').value;
+            const responseDiv = document.getElementById('edit-event-response');
 
-  try {
-    const res = await fetch(`${API_BASE_URL}/events/${eventId}`, {
-      headers: {
-        'Authorization': `Bearer ${currentToken}` // Add if using token
-      }
-    });
+            try {
+                const res = await fetch(`${API_BASE_URL}/events/${eventId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${currentToken}`
+                    }
+                });
 
-    if (!res.ok) {
-      throw new Error('Event not found');
-    }
+                if (!res.ok) {
+                    throw new Error('Event not found');
+                }
 
-    const data = await res.json();
+                const data = await res.json();
 
-    // Fill form fields
-    document.getElementById('edit-event-title').value = data.title || '';
-    document.getElementById('edit-event-description').value = data.description || '';
-    document.getElementById('edit-event-detailed-description').value = data.detailed_description || '';
-    document.getElementById('edit-event-rules').value = data.rules || '';
-    document.getElementById('edit-event-type').value = data.event_type || 'quiz';
-    document.getElementById('edit-event-poster-url').value = data.poster_url || '';
-    document.getElementById('edit-event-banner-url').value = data.banner_url || '';
-    document.getElementById('edit-event-start-date').value = formatDateTime(data.start_date);
-    document.getElementById('edit-event-end-date').value = formatDateTime(data.end_date);
-    document.getElementById('edit-event-registration-deadline').value = formatDateTime(data.registration_deadline);
-    document.getElementById('edit-event-max-participants').value = data.max_participants || 0;
-    document.getElementById('edit-event-status').value = data.status || 'upcoming';
+                // Fill form fields
+                document.getElementById('edit-event-title').value = data.title || '';
+                document.getElementById('edit-event-description').value = data.description || '';
+                document.getElementById('edit-event-detailed-description').value = data.detailed_description || '';
+                document.getElementById('edit-event-rules').value = data.rules || '';
+                document.getElementById('edit-event-type').value = data.event_type || 'quiz';
+                document.getElementById('edit-event-poster-url').value = data.poster_url || '';
+                document.getElementById('edit-event-banner-url').value = data.banner_url || '';
+                document.getElementById('edit-event-start-date').value = formatDateTime(data.start_date);
+                document.getElementById('edit-event-end-date').value = formatDateTime(data.end_date);
+                document.getElementById('edit-event-registration-deadline').value = formatDateTime(data.registration_deadline);
+                document.getElementById('edit-event-max-participants').value = data.max_participants || 0;
+                document.getElementById('edit-event-status').value = data.status || 'upcoming';
 
-    document.getElementById('edit-event-form').style.display = 'block';
-    responseDiv.textContent = '';
-  } catch (err) {
-    responseDiv.textContent = '❌ ' + err.message;
-    document.getElementById('edit-event-form').style.display = 'none';
-  }
-}
+                document.getElementById('edit-event-form').style.display = 'block';
+                responseDiv.textContent = '';
+            } catch (err) {
+                responseDiv.textContent = '❌ ' + err.message;
+                document.getElementById('edit-event-form').style.display = 'none';
+            }
+        }
 
-function formatDateTime(dateString) {
-  if (!dateString) return '';
-  const dt = new Date(dateString);
-  const offset = dt.getTimezoneOffset();
-  const localDate = new Date(dt.getTime() - offset * 60000);
-  return localDate.toISOString().slice(0, 16);
-}
+        function formatDateTime(dateString) {
+            if (!dateString) return '';
+            const dt = new Date(dateString);
+            const offset = dt.getTimezoneOffset();
+            const localDate = new Date(dt.getTime() - offset * 60000);
+            return localDate.toISOString().slice(0, 16);
+        }
 
-async function HandleEditEvent() {
-  const eventId = document.getElementById('edit-event-id').value;
+        async function HandleEditEvent() {
+            const eventId = document.getElementById('edit-event-id').value;
 
-  const payload = {
-    title: document.getElementById('edit-event-title').value,
-    description: document.getElementById('edit-event-description').value,
-    detailed_description: document.getElementById('edit-event-detailed-description').value,
-    rules: document.getElementById('edit-event-rules').value,
-    event_type: document.getElementById('edit-event-type').value,
-    poster_url: document.getElementById('edit-event-poster-url').value,
-    banner_url: document.getElementById('edit-event-banner-url').value,
-    start_date: document.getElementById('edit-event-start-date').value,
-    end_date: document.getElementById('edit-event-end-date').value,
-    registration_deadline: document.getElementById('edit-event-registration-deadline').value,
-    max_participants: parseInt(document.getElementById('edit-event-max-participants').value),
-    status: document.getElementById('edit-event-status').value
-  };
+            const payload = {
+                title: document.getElementById('edit-event-title').value,
+                description: document.getElementById('edit-event-description').value,
+                detailed_description: document.getElementById('edit-event-detailed-description').value,
+                rules: document.getElementById('edit-event-rules').value,
+                event_type: document.getElementById('edit-event-type').value,
+                poster_url: document.getElementById('edit-event-poster-url').value,
+                banner_url: document.getElementById('edit-event-banner-url').value,
+                start_date: document.getElementById('edit-event-start-date').value,
+                end_date: document.getElementById('edit-event-end-date').value,
+                registration_deadline: document.getElementById('edit-event-registration-deadline').value,
+                max_participants: parseInt(document.getElementById('edit-event-max-participants').value),
+                status: document.getElementById('edit-event-status').value
+            };
 
-  try {
-    const res = await fetch(`${API_BASE_URL}/events/${eventId}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${currentToken}` // Add if needed
-      },
-      body: JSON.stringify(payload)
-    });
+            try {
+                const res = await fetch(`${API_BASE_URL}/events/${eventId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${currentToken}`
+                    },
+                    body: JSON.stringify(payload)
+                });
 
-    const result = await res.json();
-    document.getElementById('edit-event-response').textContent = JSON.stringify(result, null, 2);
-  } catch (err) {
-    document.getElementById('edit-event-response').textContent = '❌ ' + err.message;
-  }
-}
-
+                const result = await res.json();
+                document.getElementById('edit-event-response').textContent = JSON.stringify(result, null, 2);
+            } catch (err) {
+                document.getElementById('edit-event-response').textContent = '❌ ' + err.message;
+            }
+        }
         
         async function deleteEvent() {
             try {
@@ -994,31 +1211,113 @@ async function HandleEditEvent() {
             }
         }
         
-        async function uploadCertificate() {
-            try {
-                const eventId = document.getElementById('cert-event-id').value;
-                const participantId = document.getElementById('cert-participant-id').value;
-                const fileInput = document.getElementById('cert-file');
-                
-                if (!fileInput.files.length) {
-                    throw new Error('Please select a PDF file');
-                }
-                
-                const file = fileInput.files[0];
-                const base64Data = await fileToBase64(file);
-                
-                const data = {
-                    participant_id: participantId,
-                    pdf_base64: base64Data,
-                    file_name: file.name
-                };
-                
-                const result = await makeRequest('POST', `/events/${eventId}/certificates`, data);
-                document.getElementById('upload-certificate-response').textContent = JSON.stringify(result, null, 2);
-            } catch (error) {
-                document.getElementById('upload-certificate-response').textContent = `Error: ${error.message}`;
-            }
-        }
+  async function uploadCertificate() {
+  try {
+    console.log("📥 Step 1: Collecting form values...");
+    const eventId = document.getElementById('cert-event-id').value;
+    const participantId = document.getElementById('cert-participant-id').value;
+    const sheetId = document.getElementById('cert-sheet-id').value;
+    const templateId = document.getElementById('cert-template-id').value;
+    const folderId = document.getElementById('cert-folder-id').value;
+    const participantEmail = document.getElementById('cert-email').value;
+
+    // 🛑 Step 1.1: Check if certificate already exists
+    console.log("🔍 Checking if certificate already exists...");
+    const existingCert = await makeRequest('GET', `/events/${eventId}/certificates/${participantId}`);
+    if (existingCert && existingCert.certificate_url) {
+      console.warn("⚠️ Certificate already exists:", existingCert);
+      document.getElementById('upload-certificate-response').textContent =
+        `⚠️ Certificate already sent.\nURL: ${existingCert.certificate_url}`;
+      return;
+    }
+
+    // Step 2: Build Apps Script URL
+    console.log("🔗 Step 2: Building request URL to Apps Script...");
+    const scriptUrl = `https://script.google.com/macros/s/AKfycbzMKjhRnoFlQGt6XoE-MxaqEb6fBIb64tiL-VpO77Ni_2w9BWMYIPgiK2lYZ2VBgoAc/exec`;
+    const query = `?sheetId=${sheetId}&templateId=${templateId}&folderId=${folderId}&email=${encodeURIComponent(participantEmail)}`;
+    const fullUrl = `${scriptUrl}${query}`;
+    console.log("➡️ Full URL:", fullUrl);
+
+    // Step 3: Call Apps Script
+    console.log("📡 Step 3: Sending request to Apps Script...");
+    const response = await fetch(fullUrl);
+    const responseText = await response.text();
+    console.log("📨 Response from Apps Script:", responseText);
+
+    if (!responseText.startsWith("✅")) {
+      console.error("❌ Apps Script error:", responseText);
+      throw new Error(responseText);
+    }
+
+    // Step 4: Parse response
+    console.log("🔍 Step 4: Parsing certificate URL and timestamp...");
+    const urlMatch = responseText.match(/URL: (.+?) - Timestamp:/);
+    const timestampMatch = responseText.match(/Timestamp: (.+)$/);
+    if (!urlMatch || !timestampMatch) throw new Error("Invalid response from certificate generator");
+
+    const certificateUrl = urlMatch[1];
+    const rawTimestamp = timestampMatch[1].trim();
+    const issuedAt = parseIndianTimestampToISO(rawTimestamp);
+    console.log("✅ Parsed URL:", certificateUrl);
+    console.log("✅ Parsed Timestamp (ISO):", issuedAt);
+
+    // Step 5: Generate unique code
+    const uniqueCode = generateUniqueCode();
+    console.log("🆔 Unique Code:", uniqueCode);
+
+    // Step 6: Send to backend
+    console.log("📤 Step 6: Sending data to backend...");
+    const data = {
+      event_id: parseInt(eventId),
+      participant_id: parseInt(participantId),
+      certificate_url: certificateUrl,
+      issued_at: issuedAt,
+      unique_code: uniqueCode
+    };
+
+    const result = await makeRequest('POST', `/events/${eventId}/certificates`, data);
+    console.log("✅ Backend response:", result);
+
+    document.getElementById('upload-certificate-response').textContent =
+      `✅ Certificate recorded!\n${JSON.stringify(result, null, 2)}`;
+  } catch (error) {
+    console.error("❌ Error in uploadCertificate:", error);
+    document.getElementById('upload-certificate-response').textContent = `❌ Error: ${error.message}`;
+  }
+}
+
+
+function generateUniqueCode(length = 10) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let code = '';
+  for (let i = 0; i < length; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
+
+
+function parseIndianTimestampToISO(timestampStr) {
+  // Input: "22/6/2025, 1:35:26 pm"
+  const [datePart, timePartRaw] = timestampStr.split(', ');
+  const [day, month, year] = datePart.split('/');
+  const [time, meridian] = timePartRaw.split(' ');
+  let [hours, minutes, seconds] = time.split(':').map(Number);
+
+  if (meridian.toLowerCase() === 'pm' && hours < 12) hours += 12;
+  if (meridian.toLowerCase() === 'am' && hours === 12) hours = 0;
+
+  // Format as ISO
+  const hh = String(hours).padStart(2, '0');
+  const mm = String(minutes).padStart(2, '0');
+  const ss = String(seconds).padStart(2, '0');
+  const MM = String(month).padStart(2, '0');
+  const DD = String(day).padStart(2, '0');
+
+  return new Date(`${year}-${MM}-${DD}T${hh}:${mm}:${ss}`).toISOString();
+}
+
+
         
         // Gallery functions
         async function getEventGallery() {
@@ -1030,58 +1329,60 @@ async function HandleEditEvent() {
                 document.getElementById('event-gallery-response').textContent = `Error: ${error.message}`;
             }
         }
-      async function uploadGalleryImage() {
-    try {
-        console.log('Starting image upload...');
+        
+        async function uploadGalleryImage() {
+            try {
+                console.log('Starting image upload...');
 
-        const eventId = document.getElementById('gallery-upload-event-id').value;
-        const caption = document.getElementById('gallery-caption').value;
-        const fileInput = document.getElementById('gallery-image');
+                const eventId = document.getElementById('gallery-upload-event-id').value;
+                const caption = document.getElementById('gallery-caption').value;
+                const fileInput = document.getElementById('gallery-image');
 
-        if (!fileInput.files.length) {
-            throw new Error('Please select an image file');
+                if (!fileInput.files.length) {
+                    throw new Error('Please select an image file');
+                }
+
+                const file = fileInput.files[0];
+                console.log('Selected file:', file.name, file.type, file.size);
+
+                const formData = new FormData();
+                formData.append('image', file);
+                formData.append('file_name', file.name);
+                formData.append('caption', caption);
+
+                const response = await fetch(`${API_BASE_URL}/events/${eventId}/gallery`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${currentToken}`
+                    },
+                    body: formData,
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) throw new Error(result.error || 'Unknown upload error');
+
+                console.log('Upload successful:', result);
+                document.getElementById('upload-gallery-response').textContent = JSON.stringify(result, null, 2);
+            } catch (error) {
+                console.error('Upload failed:', error);
+                document.getElementById('upload-gallery-response').textContent = `Error: ${error.message}`;
+            }
         }
-
-        const file = fileInput.files[0];
-        console.log('Selected file:', file.name, file.type, file.size);
-
-        const formData = new FormData();
-        formData.append('image', file);
-        formData.append('file_name', file.name);
-        formData.append('caption', caption);
-
-      const response = await fetch(`${API_BASE_URL}/events/${eventId}/gallery`, {
-    method: 'POST',
-    headers: {
-        'Authorization': `Bearer ${currentToken}`
-        // Don't set Content-Type - let the browser handle it for FormData
-    },
-    body: formData,
-});
-
-        const result = await response.json();
-
-        if (!response.ok) throw new Error(result.error || 'Unknown upload error');
-
-        console.log('Upload successful:', result);
-        document.getElementById('upload-gallery-response').textContent = JSON.stringify(result, null, 2);
-    } catch (error) {
-        console.error('Upload failed:', error);
-        document.getElementById('upload-gallery-response').textContent = `Error: ${error.message}`;
-    }
-}
         
         // Profile functions
         async function getMyProfile() {
             try {
                 const result = await makeRequest('GET', '/profile');
+                 document.getElementById('my-email').value = result.email;
+        document.getElementById('my-name').value = result.name;
+        document.getElementById('my-contact').value = result.contact_no || '';
+        document.getElementById('profile-response').textContent = 'Profile loaded.';
                 document.getElementById('my-profile-response').textContent = JSON.stringify(result, null, 2);
             } catch (error) {
                 document.getElementById('my-profile-response').textContent = `Error: ${error.message}`;
             }
         }
-        
-       
         
         async function getMyEvents() {
             try {
