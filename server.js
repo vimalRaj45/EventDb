@@ -679,6 +679,97 @@ app.get('/api/profile/events', authenticateToken, async (req, res) => {
   }
 });
 
+/* --------------------- PASSWORD RESET --------------------- */
+
+// Generate and send reset token
+app.post('/api/auth/forgot-password', async (req, res) => {
+  const { email } = req.body;
+
+  try {
+    const { rows } = await db.query('SELECT * FROM users WHERE email = $1', [email]);
+    if (rows.length === 0) {
+      return res.status(200).json({ message: 'If this email exists, a reset token has been sent' });
+    }
+
+    const user = rows[0];
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenExpires = new Date(Date.now() + 3600000); // 1 hour
+
+    await db.query(
+      'UPDATE users SET reset_token = $1, reset_token_expires = $2 WHERE id = $3',
+      [resetToken, resetTokenExpires, user.id]
+    );
+
+    // 🚫 REMOVE link part if not needed
+    // ✅ ONLY return token in development
+    console.log('Reset token:', resetToken);
+
+    res.status(200).json({
+      message: 'If this email exists, a reset token has been sent',
+      resetLink: `http://localhost:4000/reset-password?token=${resetToken}` // ⚠️ Optional: remove in prod
+    });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Validate reset token
+app.get('/api/auth/validate-reset-token/:token', async (req, res) => {
+  const { token } = req.params;
+
+  try {
+    // 1. Find user with this token
+    const { rows } = await db.query(
+      'SELECT * FROM users WHERE reset_token = $1 AND reset_token_expires > NOW()',
+      [token]
+    );
+    
+    if (rows.length === 0) {
+      return res.status(400).json({ error: 'Invalid or expired token' });
+    }
+    
+    res.status(200).json({ valid: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Reset password with token
+app.post('/api/auth/reset-password/:token', async (req, res) => {
+  const { token } = req.params;
+  const { password } = req.body;
+
+  try {
+    // 1. Find user with this token
+    const { rows } = await db.query(
+      'SELECT * FROM users WHERE reset_token = $1 AND reset_token_expires > NOW()',
+      [token]
+    );
+    
+    if (rows.length === 0) {
+      return res.status(400).json({ error: 'Invalid or expired token' });
+    }
+    
+    const user = rows[0];
+    
+    // 2. Hash new password
+    const hashedPassword = await bcrypt.hash(password, 10);
+    
+    // 3. Update password and clear reset token
+    await db.query(
+      'UPDATE users SET password_hash = $1, reset_token = NULL, reset_token_expires = NULL WHERE id = $2',
+      [hashedPassword, user.id]
+    );
+    
+    res.status(200).json({ message: 'Password updated successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
 // Error handling middleware
 app.use((err, _req, res, _next) => {
   console.error(err.stack);
