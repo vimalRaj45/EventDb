@@ -66,18 +66,18 @@ const authorizeRole = (role) => {
 
 /* --------------------- AUTHENTICATION --------------------- */
 app.post('/api/auth/register', async (req, res) => {
-  const { name, email, password, role = 'participant' } = req.body;
-  
+  const { name, email, password, role = 'participant', contact_no } = req.body;
+
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
-    
+
     const { rows } = await db.query(
-      `INSERT INTO users (name, email, password_hash, role) 
-       VALUES ($1, $2, $3, $4) 
-       RETURNING id, name, email, role, created_at`,
-      [name, email, hashedPassword, role]
+      `INSERT INTO users (name, email, password_hash, role, contact_no) 
+       VALUES ($1, $2, $3, $4, $5) 
+       RETURNING id, name, email, role, contact_no, created_at`,
+      [name, email, hashedPassword, role, contact_no]
     );
-    
+
     res.status(201).json(rows[0]);
   } catch (err) {
     if (err.code === '23505') {
@@ -441,72 +441,80 @@ app.get('/api/certificates/:code', async (req, res) => {
 
 app.post('/api/events/:id/certificates', authenticateToken, authorizeRole('admin'), async (req, res) => {
   const eventId = req.params.id;
-  const { participant_id, pdf_base64, file_name } = req.body;
+  const { participant_id, certificate_url, unique_code, issued_at } = req.body;
 
-  console.log('➡️ Certificate Upload Request Received');
-  console.log('📌 Event ID:', eventId);
-  console.log('📌 Participant ID:', participant_id);
-  console.log('📌 File Name:', file_name);
-  console.log('📌 PDF Base64 present:', !!pdf_base64);
-
-  if (!pdf_base64) {
-    console.warn('⚠️ No PDF data provided');
-    return res.status(400).json({ error: 'No PDF data provided' });
-  }
+  console.log('➡️ Saving certificate without PDF upload...');
+  console.log({ eventId, participant_id, certificate_url, unique_code, issued_at });
 
   try {
-    // Check if participant belongs to the event
     const participantCheck = await db.query(
       'SELECT * FROM participants WHERE id = $1 AND event_id = $2',
       [participant_id, eventId]
     );
 
     if (participantCheck.rows.length === 0) {
-      console.warn('❌ Participant not found or not registered for this event');
       return res.status(400).json({ error: 'Participant not registered for this event' });
     }
 
-    // Generate unique code
-    const uniqueCode = crypto.randomBytes(8).toString('hex');
-    console.log('🆔 Generated Unique Code:', uniqueCode);
-
-    // Prepare upload payload
-    const formData = new URLSearchParams();
-    formData.append('fileData', pdf_base64);
-    formData.append('fileName', file_name || `certificate_${eventId}_${participant_id}.pdf`);
-    formData.append('mimeType', 'application/pdf');
-    formData.append('description', `Certificate for event ${eventId}`);
-
-    console.log('📤 Uploading to Google Apps Script...');
-    const response = await axios.post(APPSCRIPT_PDF_UPLOAD_URL, formData.toString(), {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-    });
-
-    console.log('✅ Upload Response:', response.data);
-
-    const fileUrl = response.data.fileUrl;
-    if (!fileUrl) {
-      console.error('❌ No fileUrl returned from Apps Script');
-      throw new Error('Google Apps Script did not return a fileUrl');
-    }
-
-    // Save certificate record
     const { rows } = await db.query(
-      `INSERT INTO certificates (event_id, participant_id, certificate_url, unique_code)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO certificates (event_id, participant_id, certificate_url, unique_code, issued_at)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [eventId, participant_id, fileUrl, uniqueCode]
+      [eventId, participant_id, certificate_url, unique_code, issued_at]
     );
 
-    console.log('✅ Certificate saved to DB:', rows[0]);
-
+    console.log('✅ Certificate record saved:', rows[0]);
     res.status(201).json(rows[0]);
   } catch (err) {
-    console.error('🚨 Certificate upload error:', err.message);
-    console.error(err.stack);
+    console.error('🚨 Save error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
+
+// GET /events/:eventId/certificates/:participantId
+app.get('/api/events/:eventId/certificates/:participantId', authenticateToken, authorizeRole('admin'), async (req, res) => {
+  const { eventId, participantId } = req.params;
+
+  try {
+    const { rows } = await db.query(
+      `SELECT * FROM certificates WHERE event_id = $1 AND participant_id = $2`,
+      [eventId, participantId]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "No certificate found" });
+    }
+    res.status(200).json(rows[0]);
+  } catch (err) {
+    console.error("🚨 Fetch cert error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/participants/:id/email
+app.get('/api/participants/:id/email', authenticateToken, authorizeRole('admin'), async (req, res) => {
+  const participantId = req.params.id;
+
+  try {
+    const query = `
+      SELECT users.email
+      FROM participants
+      JOIN users ON participants.user_id = users.id
+      WHERE participants.id = $1
+    `;
+    const { rows } = await db.query(query, [participantId]);
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "Participant not found" });
+    }
+
+    res.json({ email: rows[0].email });
+  } catch (err) {
+    console.error("🚨 Error fetching participant email:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 
 
 // Configure multer for memory storage (since we're uploading directly to imgBB)
@@ -593,19 +601,64 @@ app.get('/api/events/:id/gallery', async (req, res) => {
 app.get('/api/profile', authenticateToken, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, role, created_at, last_login FROM users WHERE id = $1',
+      `SELECT id, name, email, role, contact_no, created_at, last_login 
+       FROM users 
+       WHERE id = $1`,
       [req.user.id]
     );
-    
+
     if (rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
-    
+
     res.json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
+app.put('/api/users/:email', async (req, res) => {
+  const email = req.params.email;
+  const { name, contact_no, role } = req.body;
+
+  try {
+    const { rowCount, rows } = await db.query(
+      `UPDATE users 
+       SET name = $1, contact_no = $2, role = COALESCE($3, role)
+       WHERE email = $4
+       RETURNING id, name, email, role, contact_no, created_at, last_login`,
+      [name, contact_no, role, email]
+    );
+
+    if (rowCount === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+app.delete('/api/users/:email', authenticateToken, authorizeRole('admin'), async (req, res) => {
+  const email = req.params.email;
+
+  try {
+    const { rowCount } = await db.query(
+      `DELETE FROM users WHERE email = $1`,
+      [email]
+    );
+
+    if (rowCount === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ message: `User with email ${email} deleted successfully.` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 
 app.get('/api/profile/events', authenticateToken, async (req, res) => {
   try {
