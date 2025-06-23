@@ -714,6 +714,167 @@ app.post('/api/auth/forgot-password', async (req, res) => {
   }
 });
 
+app.get('/admin/users', authenticateToken, authorizeRole('admin'), async (req, res) => {
+  try {
+    const query = `
+      WITH user_data AS (
+        SELECT 
+          u.*,
+          (
+            SELECT json_agg(
+              json_build_object(
+                'event_id', p.event_id,
+                'event_title', e.title,
+                'event_type', e.event_type,
+                'status', e.status,
+                'registration_data', p.registration_data,
+                'attendance', p.attendance_status,
+                'registered_at', p.registered_at,
+                'result', (
+                  SELECT json_build_object(
+                    'score', r.score,
+                    'rank', r.rank,
+                    'remarks', r.remarks
+                  )
+                  FROM results r
+                  WHERE r.event_id = p.event_id AND r.participant_id = p.id
+                ),
+                'certificate', (
+                  SELECT json_build_object(
+                    'url', c.certificate_url,
+                    'code', c.unique_code
+                  )
+                  FROM certificates c
+                  WHERE c.event_id = p.event_id AND c.participant_id = p.id
+                )
+              )
+            )
+            FROM participants p
+            JOIN events e ON e.id = p.event_id
+            WHERE p.user_id = u.id
+          ) AS participations,
+          (
+            SELECT json_agg(
+              json_build_object(
+                'event_id', e.id,
+                'title', e.title,
+                'type', e.event_type,
+                'status', e.status,
+                'participants', e.current_participants,
+                'start_date', e.start_date,
+                'end_date', e.end_date
+              )
+            )
+            FROM events e
+            WHERE e.organizer_id = u.id
+          ) AS organized_events,
+          (
+            SELECT json_agg(
+              json_build_object(
+                'event_id', eg.event_id,
+                'image_url', eg.image_url,
+                'caption', eg.caption
+              )
+            )
+            FROM event_gallery eg
+            JOIN participants p ON p.event_id = eg.event_id
+            WHERE p.user_id = u.id
+          ) AS gallery_images
+        FROM users u
+      )
+      SELECT * FROM user_data
+      ORDER BY created_at DESC
+    `;
+
+    const { rows: users } = await db.query(query);
+
+    const formattedUsers = users.map(user => ({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      verified: user.verified,
+      contact_no: user.contact_no,
+      created_at: user.created_at instanceof Date
+        ? user.created_at.toISOString()
+        : new Date(user.created_at).toISOString(),
+      last_login: user.last_login
+        ? (user.last_login instanceof Date
+            ? user.last_login.toISOString()
+            : new Date(user.last_login).toISOString())
+        : null,
+      participations: Array.isArray(user.participations)
+        ? user.participations.map(p => ({
+            ...p,
+            registered_at: p.registered_at
+              ? new Date(p.registered_at).toISOString()
+              : null
+          }))
+        : [],
+      organized_events: Array.isArray(user.organized_events)
+        ? user.organized_events.map(e => ({
+            ...e,
+            start_date: e.start_date
+              ? new Date(e.start_date).toISOString()
+              : null,
+            end_date: e.end_date
+              ? new Date(e.end_date).toISOString()
+              : null
+          }))
+        : [],
+      gallery_images: user.gallery_images || []
+    }));
+
+    res.json({
+      success: true,
+      count: users.length,
+      data: formattedUsers
+    });
+
+  } catch (error) {
+    console.error('Admin user fetch error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch user data',
+      details: process.env.NODE_ENV === 'development' ? error.message : null
+    });
+  }
+});
+
+
+
+app.post('/api/events/:id/certificates', async (req, res) => {
+  const eventId = req.params.id;
+  const { participant_id, certificate_url, unique_code, issued_at } = req.body;
+
+  console.log('➡️ Saving certificate without PDF upload...');
+  console.log({ eventId, participant_id, certificate_url, unique_code, issued_at });
+
+  try {
+    const participantCheck = await db.query(
+      'SELECT * FROM participants WHERE id = $1 AND event_id = $2',
+      [participant_id, eventId]
+    );
+
+    if (participantCheck.rows.length === 0) {
+      return res.status(400).json({ error: 'Participant not registered for this event' });
+    }
+
+    const { rows } = await db.query(
+      `INSERT INTO certificates (event_id, participant_id, certificate_url, unique_code, issued_at)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [eventId, participant_id, certificate_url, unique_code, issued_at]
+    );
+
+    console.log('✅ Certificate record saved:', rows[0]);
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error('🚨 Save error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Validate reset token
 app.get('/api/auth/validate-reset-token/:token', async (req, res) => {
   const { token } = req.params;
