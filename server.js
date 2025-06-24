@@ -875,6 +875,118 @@ app.post('/api/events/:id/certificates', async (req, res) => {
   }
 });
 
+
+
+app.get('/api/email/:email', async (req, res) => {
+    try {
+        const email = req.params.email;
+
+        if (!email || !email.includes('@')) {
+            return res.status(400).json({ error: 'Valid email address is required' });
+        }
+
+        // Query to get user's results and certificates
+        const query = `
+            SELECT 
+                u.id AS user_id,
+                u.name AS user_name,
+                u.email AS user_email,
+                e.id AS event_id,
+                e.title AS event_title,
+                e.event_type,
+                e.start_date,
+                e.end_date,
+                e.status AS event_status,
+                p.id AS participant_id,
+                p.attendance_status,
+                r.score,
+                r.rank,
+                r.remarks,
+                r.published_at AS result_published_at,
+                c.certificate_url,
+                c.unique_code AS certificate_code,
+                c.issued_at AS certificate_issued_at
+            FROM 
+                users u
+            JOIN 
+                participants p ON u.id = p.user_id
+            JOIN 
+                events e ON p.event_id = e.id
+            LEFT JOIN 
+                results r ON r.event_id = e.id AND r.participant_id = p.id
+            LEFT JOIN 
+                certificates c ON c.event_id = e.id AND c.participant_id = p.id
+            WHERE 
+                u.email = $1
+            ORDER BY 
+                e.start_date DESC;
+        `;
+
+        const { rows } = await db.query(query, [email]);
+
+        if (rows.length === 0) {
+            return res.status(404).json({ 
+                message: 'No results found for this email address',
+                hasResults: false
+            });
+        }
+
+        // Transform the data
+        const response = {
+            user: {
+                id: rows[0].user_id,
+                name: rows[0].user_name,
+                email: rows[0].user_email
+            },
+            events: rows.map(row => ({
+                event: {
+                    id: row.event_id,
+                    title: row.event_title,
+                    type: row.event_type,
+                    startDate: row.start_date,
+                    endDate: row.end_date,
+                    status: row.event_status
+                },
+                participation: {
+                    id: row.participant_id,
+                    attended: row.attendance_status
+                },
+                result: row.score !== null ? {
+                    score: row.score,
+                    rank: row.rank,
+                    remarks: row.remarks,
+                    publishedAt: row.result_published_at
+                } : null,
+                certificate: row.certificate_url ? {
+                    url: row.certificate_url,
+                    uniqueCode: row.certificate_code,
+                    issuedAt: row.certificate_issued_at
+                } : null
+            })),
+            stats: {
+                totalEvents: rows.length,
+                eventsAttended: rows.filter(r => r.attendance_status).length,
+                eventsWithResults: rows.filter(r => r.score !== null).length,
+                eventsWithCertificates: rows.filter(r => r.certificate_url).length
+            }
+        };
+
+        res.json(response);
+
+    } catch (error) {
+        console.error('Error fetching results by email:', error);
+        res.status(500).json({ 
+            error: 'Internal server error',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+});
+
+
+
+
+
+
 // Validate reset token
 app.get('/api/auth/validate-reset-token/:token', async (req, res) => {
   const { token } = req.params;
