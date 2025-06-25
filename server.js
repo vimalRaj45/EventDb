@@ -295,6 +295,40 @@ app.get('/api/userpayments', authenticateToken, async (req, res) => {
   }
 });
 
+// --------------------- GET ALL PAYMENTS (ADMIN) ---------------------
+app.get('/api/payments', authenticateToken, authorizeRole('admin'), async (req, res) => {
+  try {
+    const result = await db.query(`
+      SELECT
+        p.id AS participant_id,
+        p.user_id,
+        u.name AS user_name,
+        u.email AS user_email,
+        p.event_id,
+        e.title AS event_title,
+        e.event_fee,
+        p.registration_data,
+        p.transaction_id,
+        p.payment_verified,
+        p.verified_at,
+        p.registered_at
+      FROM participants p
+      JOIN users u ON p.user_id = u.id
+      JOIN events e ON p.event_id = e.id
+      ORDER BY p.registered_at DESC
+    `);
+
+    res.json({
+      payments: result.rows
+    });
+
+  } catch (err) {
+    console.error('Error fetching all payments:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+
 app.delete('/api/events/:id', authenticateToken, authorizeRole('admin'), async (req, res) => {
   try {
     const { rowCount } = await db.query(
