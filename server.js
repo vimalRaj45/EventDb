@@ -263,6 +263,38 @@ app.put('/api/events/:id', authenticateToken, authorizeRole('admin'), async (req
   }
 });
 
+app.get('/api/userpayments', authenticateToken, async (req, res) => {
+  const userId = req.user.id; // ✅ Extracted from JWT
+
+  try {
+    const result = await db.query(`
+      SELECT
+        p.id AS participant_id,
+        p.event_id,
+        e.title AS event_title,
+        p.registration_data,
+        p.transaction_id,
+        p.payment_verified,
+        p.verified_at,
+        p.registered_at,
+        e.event_fee
+      FROM participants p
+      JOIN events e ON p.event_id = e.id
+      WHERE p.user_id = $1
+      ORDER BY p.registered_at DESC
+    `, [userId]);
+
+    res.json({
+      user_id: userId,
+      payments: result.rows
+    });
+
+  } catch (err) {
+    console.error('Error fetching payment details:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.delete('/api/events/:id', authenticateToken, authorizeRole('admin'), async (req, res) => {
   try {
     const { rowCount } = await db.query(
