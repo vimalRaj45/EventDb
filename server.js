@@ -187,24 +187,29 @@ app.post('/api/events', authenticateToken, authorizeRole('admin'), async (req, r
     end_date,
     registration_deadline,
     max_participants,
-    status = 'upcoming'
+    status = 'upcoming',
+    event_fee = 0  // Accept numeric(10,2)
   } = req.body;
-  
+
   try {
     const { rows } = await db.query(
       `INSERT INTO events (
-        title, description, detailed_description, rules, event_type, 
-        poster_url, banner_url, start_date, end_date, registration_deadline, 
-        max_participants, status, organizer_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) 
+        title, description, detailed_description, rules, event_type,
+        poster_url, banner_url, start_date, end_date, registration_deadline,
+        max_participants, status, organizer_id, event_fee
+      ) VALUES (
+        $1, $2, $3, $4, $5,
+        $6, $7, $8, $9, $10,
+        $11, $12, $13, $14
+      )
       RETURNING *`,
       [
         title, description, detailed_description, rules, event_type,
         poster_url, banner_url, start_date, end_date, registration_deadline,
-        max_participants, status, req.user.id
+        max_participants, status, req.user.id, event_fee
       ]
     );
-    
+
     res.status(201).json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -225,38 +230,40 @@ app.put('/api/events/:id', authenticateToken, authorizeRole('admin'), async (req
     end_date,
     registration_deadline,
     max_participants,
-    status
+    status,
+    event_fee = 0  // Accept updated fee
   } = req.body;
-  
+
   try {
     const { rows } = await db.query(
-      `UPDATE events SET 
-        title = $1, 
-        description = $2, 
-        detailed_description = $3, 
-        rules = $4, 
-        event_type = $5, 
-        poster_url = $6, 
-        banner_url = $7, 
-        start_date = $8, 
-        end_date = $9, 
-        registration_deadline = $10, 
-        max_participants = $11, 
+      `UPDATE events SET
+        title = $1,
+        description = $2,
+        detailed_description = $3,
+        rules = $4,
+        event_type = $5,
+        poster_url = $6,
+        banner_url = $7,
+        start_date = $8,
+        end_date = $9,
+        registration_deadline = $10,
+        max_participants = $11,
         status = $12,
+        event_fee = $13,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $13
+      WHERE id = $14
       RETURNING *`,
       [
         title, description, detailed_description, rules, event_type,
         poster_url, banner_url, start_date, end_date, registration_deadline,
-        max_participants, status, eventId
+        max_participants, status, event_fee, eventId
       ]
     );
-    
+
     if (rows.length === 0) {
       return res.status(404).json({ error: 'Event not found' });
     }
-    
+
     res.json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
