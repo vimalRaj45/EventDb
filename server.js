@@ -284,54 +284,97 @@ app.delete('/api/events/:id', authenticateToken, authorizeRole('admin'), async (
 app.post('/api/events/:id/register', authenticateToken, async (req, res) => {
   const eventId = req.params.id;
   const userId = req.user.id;
-  const registrationData = req.body.registration_data || {};
-  
+
+  const {
+    registration_data = {},
+    transaction_id = null // Add transaction_id from request body
+  } = req.body;
+
   try {
     // Check if event exists and is open for registration
-    const event = await db.query(
-      'SELECT * FROM events WHERE id = $1 AND status IN ($2, $3) AND (registration_deadline IS NULL OR registration_deadline > NOW())',
+    const eventResult = await db.query(
+      `SELECT * FROM events 
+       WHERE id = $1 
+       AND status IN ($2, $3)
+       AND (registration_deadline IS NULL OR registration_deadline > NOW())`,
       [eventId, 'upcoming', 'ongoing']
     );
-    
-    if (event.rows.length === 0) {
+
+    if (eventResult.rows.length === 0) {
       return res.status(400).json({ error: 'Event not available for registration' });
     }
-    
+
+    const event = eventResult.rows[0];
+
     // Check if user is already registered
     const existingRegistration = await db.query(
       'SELECT * FROM participants WHERE user_id = $1 AND event_id = $2',
       [userId, eventId]
     );
-    
+
     if (existingRegistration.rows.length > 0) {
       return res.status(409).json({ error: 'Already registered for this event' });
     }
-    
+
     // Check if event has reached max participants
-    if (event.rows[0].max_participants && 
-        event.rows[0].current_participants >= event.rows[0].max_participants) {
+    if (event.max_participants && event.current_participants >= event.max_participants) {
       return res.status(400).json({ error: 'Event has reached maximum participants' });
     }
-    
-    // Register participant
+
+    // Register participant with transaction_id
     const { rows } = await db.query(
-      `INSERT INTO participants (user_id, event_id, registration_data)
-       VALUES ($1, $2, $3)
+      `INSERT INTO participants 
+        (user_id, event_id, registration_data, transaction_id)
+       VALUES ($1, $2, $3, $4)
        RETURNING *`,
-      [userId, eventId, registrationData]
+      [userId, eventId, registration_data, transaction_id]
     );
-    
-    // Update participant count
+
+    // Increment current_participants count
     await db.query(
       'UPDATE events SET current_participants = current_participants + 1 WHERE id = $1',
       [eventId]
     );
-    
+
     res.status(201).json(rows[0]);
   } catch (err) {
+    console.error('Registration error:', err);
     res.status(500).json({ error: err.message });
   }
 });
+
+// --------------------- UPDATE PAYMENT STATUS (PUT) ---------------------
+app.put('/api/participants/:id/payment', authenticateToken, authorizeRole('admin'), async (req, res) => {
+  const participantId = req.params.id;
+  const { payment_verified } = req.body;
+
+  if (typeof payment_verified !== 'boolean') {
+    return res.status(400).json({ error: 'payment_verified must be a boolean' });
+  }
+
+  try {
+    const result = await db.query(
+      `UPDATE participants
+       SET payment_verified = $1,
+           verified_at = CASE WHEN $1 = true THEN NOW() ELSE NULL END
+       WHERE id = $2
+       RETURNING *`,
+      [payment_verified, participantId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Participant not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Payment status update failed:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
 
 app.get('/api/events/:id/participants', authenticateToken, authorizeRole('admin'), async (req, res) => {
   try {
