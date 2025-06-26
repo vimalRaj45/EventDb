@@ -1208,11 +1208,20 @@ app.get('/api/internships/:id', async (req, res) => {
   }
 });
 
-// 🔁 UPDATE Internship (PUT)
-app.put('/api/internships/:id',authenticateToken,authorizeRole('admin'), async (req, res) => {
+// 🔁 UPDATE Internship (Full Admin Edit)
+app.put('/api/internships/:id', authenticateToken, authorizeRole('admin'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { company_name, position, duration, start_date, end_date, certificate_link } = req.body;
+    const {
+      company_name,
+      position,
+      duration,
+      start_date,
+      end_date,
+      certificate_link,
+      status // 👈 include status too
+    } = req.body;
+
     const result = await db.query(
       `UPDATE internships SET
         company_name = $1,
@@ -1220,15 +1229,19 @@ app.put('/api/internships/:id',authenticateToken,authorizeRole('admin'), async (
         duration = $3,
         start_date = $4,
         end_date = $5,
-        certificate_link = $6
-      WHERE id = $7 RETURNING *`,
-      [company_name, position, duration, start_date, end_date, certificate_link, id]
+        certificate_link = $6,
+        status = $7
+      WHERE id = $8 RETURNING *`,
+      [company_name, position, duration, start_date, end_date, certificate_link, status, id]
     );
+
     res.json(result.rows[0]);
   } catch (err) {
+    console.error("❌ Update error:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
+
 
 // ❌ DELETE Internship (DELETE)
 app.delete('/api/internships/:id', authenticateToken, authorizeRole('admin'), async (req, res) => {
