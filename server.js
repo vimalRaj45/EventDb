@@ -1333,6 +1333,29 @@ app.put('/api/admin/applications/:id/status', authenticateToken, authorizeRole('
 });
 
 
+// ✅ Get User by ID (Admin Only)
+app.get('/api/users/:id', authenticateToken, authorizeRole('admin'), async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await db.query(
+      `SELECT id, name, email, role, created_at, last_login, verified, contact_no
+       FROM users WHERE id = $1`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('❌ Error fetching user by ID:', err.message);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+
 
 
 // Error handling middleware
