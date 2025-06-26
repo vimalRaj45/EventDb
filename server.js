@@ -1144,12 +1144,20 @@ app.get('/api/internships/applied', authenticateToken, async (req, res) => {
 app.get('/api/admin/applications', authenticateToken, authorizeRole('admin'), async (req, res) => {
   try {
     const result = await db.query(`
-      SELECT a.id, u.name AS student_name, u.email, i.company_name, i.position, a.applied_at
-      FROM applications a
-      JOIN users u ON u.id = a.user_id
-      JOIN internships i ON i.id = a.internship_id
-      ORDER BY a.applied_at DESC
-    `);
+  SELECT 
+    a.id, 
+    u.id AS user_id,          -- ✅ add this
+    u.name AS student_name, 
+    u.email, 
+    i.company_name, 
+    i.position, 
+    a.applied_at,
+    a.status                  -- ✅ include status if needed
+  FROM applications a
+  JOIN users u ON u.id = a.user_id
+  JOIN internships i ON i.id = a.internship_id
+  ORDER BY a.applied_at DESC
+`);
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
