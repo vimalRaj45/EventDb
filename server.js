@@ -1120,11 +1120,13 @@ app.post('/api/internships/:id/apply', authenticateToken, async (req, res) => {
 });
 
 // 📄 GET Your Applications
+// 📄 GET Your Applications (with status)
 app.get('/api/internships/applied', authenticateToken, async (req, res) => {
   const userId = req.user.id;
   try {
     const result = await db.query(
-      `SELECT i.* FROM internships i
+      `SELECT i.*, a.status
+       FROM internships i
        JOIN applications a ON i.id = a.internship_id
        WHERE a.user_id = $1
        ORDER BY a.applied_at DESC`,
@@ -1135,6 +1137,7 @@ app.get('/api/internships/applied', authenticateToken, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 
 // 📄 ADMIN: View all applications
