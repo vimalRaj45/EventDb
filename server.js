@@ -1308,6 +1308,30 @@ app.delete('/api/internships/:id', authenticateToken, authorizeRole('admin'), as
 
 
 
+// ✅ Change Application Status (Admin Only)
+app.put('/api/admin/applications/:id/status', authenticateToken, authorizeRole('admin'), async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body; // expected values: 'approved' or 'rejected'
+
+  if (!['approved', 'rejected'].includes(status)) {
+    return res.status(400).json({ error: 'Invalid status' });
+  }
+
+  try {
+    const result = await db.query(
+      'UPDATE applications SET status = $1 WHERE id = $2 RETURNING *',
+      [status, id]
+    );
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Application not found' });
+    res.json({ message: `Application ${status}`, application: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
+
 // Error handling middleware
 app.use((err, _req, res, _next) => {
   console.error(err.stack);
