@@ -1158,17 +1158,16 @@ app.post('/api/auth/reset-password/:token', async (req, res) => {
   }
 });
 
-
-
-// 📥 CREATE Internship (POST)
-app.post('/api/internships',authenticateToken,async (req, res) => {
+// 📥 CREATE Internship (only logged-in user can create)
+app.post('/api/internships', authenticateToken, async (req, res) => {
+  const userId = req.user.id;
+  const { company_name, position, duration, start_date, end_date, certificate_link } = req.body;
   try {
-    const { user_id, company_name, position, duration, start_date, end_date, certificate_link } = req.body;
     const result = await db.query(
       `INSERT INTO internships 
         (user_id, company_name, position, duration, start_date, end_date, certificate_link)
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-      [user_id, company_name, position, duration, start_date, end_date, certificate_link]
+      [userId, company_name, position, duration, start_date, end_date, certificate_link]
     );
     res.json(result.rows[0]);
   } catch (err) {
@@ -1180,6 +1179,17 @@ app.post('/api/internships',authenticateToken,async (req, res) => {
 app.get('/api/internships', async (req, res) => {
   try {
     const result = await db.query('SELECT * FROM internships ORDER BY id DESC');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 📄 READ Internships (only for logged-in user)
+app.get('/api/getyour/internships', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const result = await db.query('SELECT * FROM internships WHERE user_id = $1 ORDER BY id DESC', [userId]);
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
