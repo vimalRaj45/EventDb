@@ -1100,6 +1100,58 @@ app.get('/api/email/:email', async (req, res) => {
 });
 
 
+// 📥 APPLY to Internship
+app.post('/api/internships/:id/apply', authenticateToken, async (req, res) => {
+  const userId = req.user.id;
+  const internshipId = req.params.id;
+  try {
+    const result = await db.query(
+      `INSERT INTO applications (user_id, internship_id)
+       VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING *`,
+      [userId, internshipId]
+    );
+    if (result.rowCount === 0) {
+      return res.status(409).json({ message: 'Already applied' });
+    }
+    res.json({ message: 'Applied successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 📄 GET Your Applications
+app.get('/api/internships/applied', authenticateToken, async (req, res) => {
+  const userId = req.user.id;
+  try {
+    const result = await db.query(
+      `SELECT i.* FROM internships i
+       JOIN applications a ON i.id = a.internship_id
+       WHERE a.user_id = $1
+       ORDER BY a.applied_at DESC`,
+      [userId]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+// 📄 ADMIN: View all applications
+app.get('/api/admin/applications', authenticateToken, authorizeRole('admin'), async (req, res) => {
+  try {
+    const result = await db.query(`
+      SELECT a.id, u.name AS student_name, u.email, i.company_name, i.position, a.applied_at
+      FROM applications a
+      JOIN users u ON u.id = a.user_id
+      JOIN internships i ON i.id = a.internship_id
+      ORDER BY a.applied_at DESC
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 
 
