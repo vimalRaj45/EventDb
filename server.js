@@ -1,3 +1,4 @@
+
 require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -1152,6 +1153,79 @@ app.post('/api/auth/reset-password/:token', async (req, res) => {
     );
     
     res.status(200).json({ message: 'Password updated successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
+// 📥 CREATE Internship (POST)
+app.post('/api/internships',authenticateToken,async (req, res) => {
+  try {
+    const { user_id, company_name, position, duration, start_date, end_date, certificate_link } = req.body;
+    const result = await db.query(
+      `INSERT INTO internships 
+        (user_id, company_name, position, duration, start_date, end_date, certificate_link)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [user_id, company_name, position, duration, start_date, end_date, certificate_link]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 📄 READ All Internships (GET)
+app.get('/api/internships', async (req, res) => {
+  try {
+    const result = await db.query('SELECT * FROM internships ORDER BY id DESC');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 📄 READ One Internship (GET)
+app.get('/api/internships/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await db.query('SELECT * FROM internships WHERE id = $1', [id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Internship not found' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 🔁 UPDATE Internship (PUT)
+app.put('/api/internships/:id',authenticateToken,authorizeRole('admin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { company_name, position, duration, start_date, end_date, certificate_link } = req.body;
+    const result = await db.query(
+      `UPDATE internships SET
+        company_name = $1,
+        position = $2,
+        duration = $3,
+        start_date = $4,
+        end_date = $5,
+        certificate_link = $6
+      WHERE id = $7 RETURNING *`,
+      [company_name, position, duration, start_date, end_date, certificate_link, id]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ❌ DELETE Internship (DELETE)
+app.delete('/api/internships/:id', authenticateToken, authorizeRole('admin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    await db.query('DELETE FROM internships WHERE id = $1', [id]);
+    res.json({ message: 'Internship deleted successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
