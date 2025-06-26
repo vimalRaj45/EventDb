@@ -1230,7 +1230,7 @@ app.post('/api/internships', authenticateToken, async (req, res) => {
       `INSERT INTO internships 
         (user_id, company_name, position, duration, start_date, end_date, imgurl)
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-      [userId, company_name, position, duration, start_date, end_date, certificate_link]
+      [userId, company_name, position, duration, start_date, end_date, imgurl]
     );
     res.json(result.rows[0]);
   } catch (err) {
@@ -1295,7 +1295,7 @@ app.put('/api/internships/:id', authenticateToken, authorizeRole('admin'), async
         imgurl = $6,
         status = $7
       WHERE id = $8 RETURNING *`,
-      [company_name, position, duration, start_date, end_date, certificate_link, status, id]
+      [company_name, position, duration, start_date, end_date, imgurl, status, id]
     );
 
     res.json(result.rows[0]);
