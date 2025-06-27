@@ -1364,6 +1364,8 @@ app.get('/api/users/:id', authenticateToken, authorizeRole('admin'), async (req,
 });
 
 
+// for uptime Express example
+app.get('/ping', (req, res) => res.send('Pong!'));
 
 
 // Error handling middleware
