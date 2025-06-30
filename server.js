@@ -1364,6 +1364,205 @@ app.get('/api/users/:id', authenticateToken, authorizeRole('admin'), async (req,
 });
 
 
+
+
+
+
+//std referer 
+
+function generateReferralCode() {
+  const prefix = 'ID';
+  const randomStr = Math.random().toString(36).substring(2, 8).toUpperCase();
+  return prefix + Math.floor(Math.random() * 999).toString().padStart(3, '0') + randomStr;
+}
+
+async function uploadToImgBB(buffer) {
+  const base64 = buffer.toString('base64');
+  const form = new URLSearchParams();
+  form.append('key', '76954d664f0beaf57b8c5a5b0eca84e6');
+  form.append('image', base64);
+
+  const response = await axios.post('https://api.imgbb.com/1/upload', form);
+  return response.data.data.url;
+}
+
+
+app.post('/stdlogin', async (req, res) => {
+  try {
+    const { contact_number, email } = req.body;
+
+    const query = `
+      SELECT id, first_name, last_name, gender, contact_number, whatsapp_number,
+             email, college_name, study_year, district, referral_code,
+             payment_method, payment_number, target, attained
+      FROM students
+      WHERE contact_number = $1 AND email = $2
+    `;
+
+    const result = await db.query(query, [contact_number, email]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    res.json(result.rows[0]);
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+
+
+// CREATE student
+app.post('/students', authenticateToken, authorizeRole('admin'), upload.fields([
+  { name: 'clg_id_photo' },
+  { name: 'photo' },
+  { name: 'signature_photo' }
+]), async (req, res) => {
+  try {
+    const {
+      first_name, last_name, gender, contact_number, whatsapp_number,
+      email, college_name, study_year, district,
+      payment_method, payment_number, target, attained
+    } = req.body;
+
+    const referral_code = generateReferralCode();
+
+    const clg_id_photo_url = req.files?.clg_id_photo ? await uploadToImgBB(req.files.clg_id_photo[0].buffer) : null;
+    const photo_url = req.files?.photo ? await uploadToImgBB(req.files.photo[0].buffer) : null;
+    const signature_photo_url = req.files?.signature_photo ? await uploadToImgBB(req.files.signature_photo[0].buffer) : null;
+
+    const query = `
+      INSERT INTO students (
+        first_name, last_name, gender, contact_number, whatsapp_number,
+        email, college_name, study_year, district, referral_code,
+        payment_method, payment_number, clg_id_photo_url, photo_url,
+        signature_photo_url, target, attained
+      )
+      VALUES (
+        $1, $2, $3, $4, $5,
+        $6, $7, $8, $9, $10,
+        $11, $12, $13, $14, $15,
+        $16, $17
+      )
+      RETURNING id
+    `;
+
+    const values = [
+      first_name, last_name, gender, contact_number, whatsapp_number,
+      email, college_name, study_year, district, referral_code,
+      payment_method, payment_number, clg_id_photo_url, photo_url,
+      signature_photo_url, target, attained
+    ];
+
+    const result = await db.query(query, values);
+    res.json({ message: 'Student created', id: result.rows[0].id });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// READ all students
+app.get('/students', authenticateToken, authorizeRole('admin'), async (req, res) => {
+  try {
+    const result = await db.query('SELECT * FROM students ORDER BY id DESC');
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// READ one student
+app.get('/students/:id', async (req, res) => {
+  try {
+    const result = await db.query('SELECT * FROM students WHERE id = $1', [req.params.id]);
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: 'Student not found' });
+    } else {
+      res.json(result.rows[0]);
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// UPDATE student (partial)
+app.put('/students/:id', authenticateToken, authorizeRole('admin'), async (req, res) => {
+  try {
+    const updates = req.body;
+    const fields = Object.keys(updates);
+    const values = Object.values(updates);
+
+    const setClause = fields.map((field, i) => `${field} = $${i + 1}`).join(', ');
+    const query = `UPDATE students SET ${setClause} WHERE id = $${fields.length + 1}`;
+    values.push(req.params.id);
+
+    await db.query(query, values);
+    res.json({ message: 'Student updated' });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DELETE student
+app.delete('/students/:id', authenticateToken, authorizeRole('admin'), async (req, res) => {
+  try {
+    await db.query('DELETE FROM students WHERE id = $1', [req.params.id]);
+    res.json({ message: 'Student deleted' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+app.post('/visits/untracked', async (req, res) => {
+  try {
+    await db.query('INSERT INTO untracked_visits DEFAULT VALUES');
+    res.json({ message: 'Untracked visit recorded' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
+app.post('/students/increment-attained', async (req, res) => {
+  try {
+    const { referral_code } = req.body;
+
+    // Increment attained by 1 for the given referral code
+    const updateQuery = `
+      UPDATE students
+      SET attained = COALESCE(attained, 0) + 1
+      WHERE referral_code = $1
+      RETURNING attained
+    `;
+
+    const result = await db.query(updateQuery, [referral_code]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Referral code not found' });
+    }
+
+    res.json({
+      message: 'Attained updated successfully',
+      attained: result.rows[0].attained
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+
+
+
+
+
 // for uptime Express example
 app.get('/ping', (req, res) => res.send('Pong!'));
 
