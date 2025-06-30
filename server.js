@@ -1415,7 +1415,7 @@ app.post('/stdlogin', async (req, res) => {
 
 
 
-// CREATE student
+// CREATE student (prevent duplicates)
 app.post('/students', authenticateToken, authorizeRole('admin'), upload.fields([
   { name: 'clg_id_photo' },
   { name: 'photo' },
@@ -1428,13 +1428,24 @@ app.post('/students', authenticateToken, authorizeRole('admin'), upload.fields([
       payment_method, payment_number, target, attained
     } = req.body;
 
+    // ✅ Check for duplicates by contact or email
+    const checkQuery = `
+      SELECT id FROM students 
+      WHERE contact_number = $1 OR email = $2
+    `;
+    const check = await db.query(checkQuery, [contact_number, email]);
+
+    if (check.rows.length > 0) {
+      return res.status(409).json({ error: 'Student already exists with this contact number or email.' });
+    }
+
     const referral_code = generateReferralCode();
 
     const clg_id_photo_url = req.files?.clg_id_photo ? await uploadToImgBB(req.files.clg_id_photo[0].buffer) : null;
     const photo_url = req.files?.photo ? await uploadToImgBB(req.files.photo[0].buffer) : null;
     const signature_photo_url = req.files?.signature_photo ? await uploadToImgBB(req.files.signature_photo[0].buffer) : null;
 
-    const query = `
+    const insertQuery = `
       INSERT INTO students (
         first_name, last_name, gender, contact_number, whatsapp_number,
         email, college_name, study_year, district, referral_code,
@@ -1457,13 +1468,14 @@ app.post('/students', authenticateToken, authorizeRole('admin'), upload.fields([
       signature_photo_url, target, attained
     ];
 
-    const result = await db.query(query, values);
+    const result = await db.query(insertQuery, values);
     res.json({ message: 'Student created', id: result.rows[0].id });
 
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
+
 
 // READ all students
 app.get('/students', authenticateToken, authorizeRole('admin'), async (req, res) => {
