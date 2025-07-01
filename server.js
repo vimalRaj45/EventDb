@@ -1533,7 +1533,7 @@ app.delete('/students/:id', authenticateToken, authorizeRole('admin'), async (re
 
 app.post('/visits/untracked', async (req, res) => {
   try {
-    await db.query('INSERT INTO untracked_visits DEFAULT VALUES');
+    await db.query('INSERT INTO unreferd_visits DEFAULT VALUES');
     res.json({ message: 'Untracked visit recorded' });
   } catch (err) {
     res.status(500).json({ error: err.message });
