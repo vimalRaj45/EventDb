@@ -38,7 +38,7 @@ const db = new Pool({
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 // Google Apps Script URL for PDF uploads
-const APPSCRIPT_PDF_UPLOAD_URL = process.env.APPSCRIPT_PDF_UPLOAD_URL || 'https://script.google.com/macros/s/AKfycbxEIT_M2tGkM1lqKf0Oer6sqLmzIWg-qGtBfkDdVE5BLG0AILBEomp4MDp-pS9_zB-B/exec';
+const APPSCRIPT_PDF_UPLOAD_URL = process.env.APPSCRIPT_PDF_UPLOAD_URL || 'https://script.google.com/macros/s/AKfycbyVB5_MKM4mFUDNpOFDh8ASxGspDN0V4UDru7kyAwR1L6XLP354jBth22WH_KsPZT_z/exec';
 
 // Utility functions
 const authenticateToken = (req, res, next) => {
