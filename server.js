@@ -1416,7 +1416,7 @@ app.post('/stdlogin', async (req, res) => {
 
 
 // CREATE student (prevent duplicates)
-app.post('/students', authenticateToken, authorizeRole('admin'), upload.fields([
+app.post('/students', upload.fields([
   { name: 'clg_id_photo' },
   { name: 'photo' },
   { name: 'signature_photo' }
