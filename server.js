@@ -1416,7 +1416,7 @@ app.post('/stdlogin', async (req, res) => {
 
 
 // CREATE student (prevent duplicates)
-app.post('/students', upload.fields([
+app.post('/students', authenticateToken, authorizeRole('admin'), upload.fields([
   { name: 'clg_id_photo' },
   { name: 'photo' },
   { name: 'signature_photo' }
@@ -1569,67 +1569,6 @@ app.post('/students/increment-attained', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
-app.post('/admin/approve-student/:id', authenticateToken, authorizeRole('admin'), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const result = await db.query(`
-      UPDATE students SET status = 'approved' WHERE id = $1
-    `, [id]);
-
-    if (result.rowCount === 0) {
-      return res.status(404).json({ error: 'Student not found' });
-    }
-
-    res.json({ message: 'Student approved successfully.' });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-
-async function promoteIfEligible(referral_code) {
-  const studentRes = await db.query(`SELECT id, attained, target, is_referrer, referrer_status FROM students WHERE referral_code = $1`, [referral_code]);
-
-  if (studentRes.rowCount === 0) return;
-  const student = studentRes.rows[0];
-
-  if (
-    student.attained >= student.target &&
-    student.is_referrer &&
-    student.referrer_status === 'approved'
-  ) {
-    await db.query(`
-      UPDATE students
-      SET is_mentor = TRUE, role = 'mentor'
-      WHERE id = $1
-    `, [student.id]);
-  }
-}
-
-
-app.post('/assign-target', authenticateToken, async (req, res) => {
-  try {
-    const { student_id, target, assigner_id } = req.body;
-
-    // Optional: check if assigner is admin or mentor
-    const check = await db.query(`SELECT role FROM students WHERE id = $1`, [assigner_id]);
-    if (check.rowCount === 0 || !['admin', 'mentor'].includes(check.rows[0].role)) {
-      return res.status(403).json({ error: 'Only admin or mentor can assign target.' });
-    }
-
-    await db.query(`
-      UPDATE students
-      SET target = $1, assigned_by = $2
-      WHERE id = $3
-    `, [target, assigner_id, student_id]);
-
-    res.json({ message: 'Target assigned successfully.' });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
 
 
 
