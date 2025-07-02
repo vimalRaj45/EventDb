@@ -1570,6 +1570,24 @@ app.post('/students/increment-attained', async (req, res) => {
   }
 });
 
+app.post('/admin/approve-student/:id', authenticateToken, authorizeRole('admin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await db.query(`
+      UPDATE students SET status = 'approved' WHERE id = $1
+    `, [id]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    res.json({ message: 'Student approved successfully.' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
 
 
 
