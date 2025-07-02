@@ -1445,28 +1445,29 @@ app.post('/students', authenticateToken, authorizeRole('admin'), upload.fields([
     const photo_url = req.files?.photo ? await uploadToImgBB(req.files.photo[0].buffer) : null;
     const signature_photo_url = req.files?.signature_photo ? await uploadToImgBB(req.files.signature_photo[0].buffer) : null;
 
-    const insertQuery = `
-      INSERT INTO students (
-        first_name, last_name, gender, contact_number, whatsapp_number,
-        email, college_name, study_year, district, referral_code,
-        payment_method, payment_number, clg_id_photo_url, photo_url,
-        signature_photo_url, target, attained
-      )
-      VALUES (
-        $1, $2, $3, $4, $5,
-        $6, $7, $8, $9, $10,
-        $11, $12, $13, $14, $15,
-        $16, $17
-      )
-      RETURNING id
-    `;
+   const insertQuery = `
+  INSERT INTO students (
+    first_name, last_name, gender, contact_number, whatsapp_number,
+    email, college_name, study_year, district, referral_code,
+    payment_method, payment_number, clg_id_photo_url, photo_url,
+    signature_photo_url, target, attained, status
+  )
+  VALUES (
+    $1, $2, $3, $4, $5,
+    $6, $7, $8, $9, $10,
+    $11, $12, $13, $14, $15,
+    $16, $17, 'pending'
+  )
+  RETURNING id
+`;
 
-    const values = [
-      first_name, last_name, gender, contact_number, whatsapp_number,
-      email, college_name, study_year, district, referral_code,
-      payment_method, payment_number, clg_id_photo_url, photo_url,
-      signature_photo_url, target, attained
-    ];
+const values = [
+  first_name, last_name, gender, contact_number, whatsapp_number,
+  email, college_name, study_year, district, referral_code,
+  payment_method, payment_number, clg_id_photo_url, photo_url,
+  signature_photo_url, target, attained
+];
+
 
     const result = await db.query(insertQuery, values);
     res.json({ message: 'Student created', id: result.rows[0].id });
