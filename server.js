@@ -1370,10 +1370,13 @@ app.get('/api/users/:id', authenticateToken, authorizeRole('admin'), async (req,
 
 //std referer 
 
+
+// 🔄 Enhanced Referral Code Generator
 function generateReferralCode() {
   const prefix = 'ID';
-  const randomStr = Math.random().toString(36).substring(2, 8).toUpperCase();
-  return prefix + Math.floor(Math.random() * 999).toString().padStart(3, '0') + randomStr;
+  const randomStr = Math.random().toString(36).substring(2, 6).toUpperCase();
+  const timestamp = Date.now().toString().slice(-4);
+  return `${prefix}${timestamp}${randomStr}`;
 }
 
 async function uploadToImgBB(buffer) {
@@ -1386,37 +1389,21 @@ async function uploadToImgBB(buffer) {
   return response.data.data.url;
 }
 
-
+// 🔐 Student Login
 app.post('/stdlogin', async (req, res) => {
   try {
     const { contact_number, email } = req.body;
-
-    const query = `
-      SELECT id, first_name, last_name, gender, contact_number, whatsapp_number,
-             email, college_name, study_year, district, referral_code,
-             payment_method, payment_number, target, attained
-      FROM students
-      WHERE contact_number = $1 AND email = $2
-    `;
-
+    const query = `SELECT * FROM students WHERE contact_number = $1 AND email = $2`;
     const result = await db.query(query, [contact_number, email]);
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Student not found' });
-    }
-
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Student not found' });
     res.json(result.rows[0]);
-
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-
-
-
-// CREATE student (prevent duplicates)
-app.post('/students', authenticateToken, authorizeRole('admin'), upload.fields([
+// 📝 Enhanced Register Student (Pending) with Referral Validation
+app.post('/students', upload.fields([
   { name: 'clg_id_photo' },
   { name: 'photo' },
   { name: 'signature_photo' }
@@ -1425,111 +1412,416 @@ app.post('/students', authenticateToken, authorizeRole('admin'), upload.fields([
     const {
       first_name, last_name, gender, contact_number, whatsapp_number,
       email, college_name, study_year, district,
-      payment_method, payment_number, target, attained
+      payment_method, payment_number, target = 0, attained = 0,
+      referrer_code, assigned_by = 'admin'
     } = req.body;
 
-    // ✅ Check for duplicates by contact or email
-    const checkQuery = `
-      SELECT id FROM students 
-      WHERE contact_number = $1 OR email = $2
-    `;
-    const check = await db.query(checkQuery, [contact_number, email]);
-
-    if (check.rows.length > 0) {
-      return res.status(409).json({ error: 'Student already exists with this contact number or email.' });
+    // Validate referrer code if provided
+    if (referrer_code) {
+      const referrerExists = await db.query(
+        'SELECT id FROM students WHERE referral_code = $1 AND status = $2',
+        [referrer_code, 'approved']
+      );
+      if (referrerExists.rows.length === 0) {
+        return res.status(400).json({ error: 'Invalid or inactive referral code' });
+      }
     }
 
-    const referral_code = generateReferralCode();
+    const check = await db.query(
+      `SELECT id FROM students WHERE contact_number = $1 OR email = $2`,
+      [contact_number, email]
+    );
+    if (check.rows.length > 0) return res.status(409).json({ error: 'Student already exists.' });
 
     const clg_id_photo_url = req.files?.clg_id_photo ? await uploadToImgBB(req.files.clg_id_photo[0].buffer) : null;
     const photo_url = req.files?.photo ? await uploadToImgBB(req.files.photo[0].buffer) : null;
     const signature_photo_url = req.files?.signature_photo ? await uploadToImgBB(req.files.signature_photo[0].buffer) : null;
 
-   const insertQuery = `
-  INSERT INTO students (
-    first_name, last_name, gender, contact_number, whatsapp_number,
-    email, college_name, study_year, district, referral_code,
-    payment_method, payment_number, clg_id_photo_url, photo_url,
-    signature_photo_url, target, attained, status
-  )
-  VALUES (
-    $1, $2, $3, $4, $5,
-    $6, $7, $8, $9, $10,
-    $11, $12, $13, $14, $15,
-    $16, $17, 'pending'
-  )
-  RETURNING id
-`;
+    const insertQuery = `
+      INSERT INTO students (
+        first_name, last_name, gender, contact_number, whatsapp_number,
+        email, college_name, study_year, district, referral_code,
+        payment_method, payment_number, clg_id_photo_url, photo_url,
+        signature_photo_url, target, attained, status,
+        is_mentor, role, referrer_code, assigned_by
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, NULL,
+        $10, $11, $12, $13, $14, $15, $16, 'pending',
+        false, 'student', $17, $18
+      ) RETURNING id
+    `;
 
-const values = [
-  first_name, last_name, gender, contact_number, whatsapp_number,
-  email, college_name, study_year, district, referral_code,
-  payment_method, payment_number, clg_id_photo_url, photo_url,
-  signature_photo_url, target, attained
-];
-
+    const values = [
+      first_name, last_name, gender, contact_number, whatsapp_number,
+      email, college_name, study_year, district,
+      payment_method, payment_number, clg_id_photo_url, photo_url,
+      signature_photo_url, target, attained,
+      referrer_code, assigned_by
+    ];
 
     const result = await db.query(insertQuery, values);
-    res.json({ message: 'Student created', id: result.rows[0].id });
+    res.json({ message: 'Student registered successfully. Awaiting approval.', id: result.rows[0].id });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
+// ✅ Enhanced Admin Approves Student with Referral Tracking
+app.put('/students/approve/:id', authorizeRole('admin'), async (req, res) => {
+  try {
+    const referral_code = generateReferralCode();
+    const query = `
+      UPDATE students
+      SET status = 'approved', referral_code = $1
+      WHERE id = $2
+      RETURNING *
+    `;
+    const result = await db.query(query, [referral_code, req.params.id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Not found' });
+    
+    const student = result.rows[0];
+    
+    // If this student was referred by someone, update referrer's stats
+    if (student.referrer_code) {
+      await db.query(
+        `UPDATE students 
+         SET attained = attained + 1 
+         WHERE referral_code = $1`,
+        [student.referrer_code]
+      );
+      
+      // Check if referrer achieved their target and promote if needed
+      const referrer = await db.query(
+        `SELECT id, target, attained, is_mentor 
+         FROM students 
+         WHERE referral_code = $1`,
+        [student.referrer_code]
+      );
+      
+      if (referrer.rows.length > 0) {
+        const { id, target, attained, is_mentor } = referrer.rows[0];
+        if (!is_mentor && attained >= target) {
+          await db.query(
+            `UPDATE students 
+             SET is_mentor = true, role = 'mentor' 
+             WHERE id = $1`,
+            [id]
+          );
+        }
+      }
+    }
+    
+    res.json({ message: 'Approved', student: result.rows[0] });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 🧑‍🏫 Admin Creates Mentor
+app.post('/admin/create-mentor', authorizeRole('admin'), async (req, res) => {
+  try {
+    const { first_name, last_name, gender, contact_number, whatsapp_number, email, college_name, study_year, district, payment_method, payment_number } = req.body;
+    const check = await db.query(`SELECT id FROM students WHERE contact_number = $1 OR email = $2`, [contact_number, email]);
+    if (check.rows.length > 0) return res.status(409).json({ error: 'Mentor already exists.' });
+
+    const referral_code = generateReferralCode();
+    const insert = `INSERT INTO students (first_name, last_name, gender, contact_number, whatsapp_number, email, college_name, study_year, district, referral_code, payment_method, payment_number, status, is_mentor, role) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'approved',true,'mentor') RETURNING *`;
+    const result = await db.query(insert, [first_name, last_name, gender, contact_number, whatsapp_number, email, college_name, study_year, district, referral_code, payment_method, payment_number]);
+
+    res.json({ message: 'Mentor created', mentor: result.rows[0] });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 📥 Enhanced Referral Tree with Performance Metrics
+app.get('/students/referral-tree/:code', async (req, res) => {
+  try {
+    const query = `
+      WITH RECURSIVE referral_tree AS (
+        SELECT 
+          id, first_name, last_name, email, referral_code, 
+          referrer_code, role, target, attained, status,
+          0 AS level
+        FROM students 
+        WHERE referral_code = $1
+        
+        UNION ALL
+        
+        SELECT 
+          s.id, s.first_name, s.last_name, s.email, 
+          s.referral_code, s.referrer_code, s.role, 
+          s.target, s.attained, s.status,
+          rt.level + 1
+        FROM students s
+        JOIN referral_tree rt ON s.referrer_code = rt.referral_code
+      )
+      SELECT 
+        id, first_name, last_name, email, 
+        referral_code, referrer_code, role, 
+        target, attained, status, level,
+        (attained >= target) AS target_achieved,
+        (SELECT COUNT(*) FROM students WHERE referrer_code = rt.referral_code) AS referral_count
+      FROM referral_tree rt
+      ORDER BY level, id
+    `;
+    const result = await db.query(query, [req.params.code]);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 🧍 Promote to Mentor
+app.put('/students/promote/:id', authorizeRole('admin'), async (req, res) => {
+  try {
+    const query = `UPDATE students SET is_mentor = true, role = 'mentor' WHERE id = $1 RETURNING *`;
+    const result = await db.query(query, [req.params.id]);
+    res.json({ message: 'Promoted to mentor', student: result.rows[0] });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 🎯 Enhanced Mentor Assigns Target with Validation
+app.post('/mentors/assign-target', async (req, res) => {
+  try {
+    const { student_id, target, mentor_email } = req.body;
+
+    // Verify mentor exists and get their referral code
+    const mentor = await db.query(
+      `SELECT referral_code FROM students WHERE email = $1 AND role = 'mentor'`,
+      [mentor_email]
+    );
+    
+    if (mentor.rows.length === 0) {
+      return res.status(403).json({ error: 'Mentor not found' });
+    }
+    
+    const mentorCode = mentor.rows[0].referral_code;
+
+    // Verify the student was referred by this mentor
+    const student = await db.query(
+      `SELECT id FROM students WHERE id = $1 AND referrer_code = $2`,
+      [student_id, mentorCode]
+    );
+    
+    if (student.rows.length === 0) {
+      return res.status(403).json({ error: 'Student not referred by this mentor' });
+    }
+
+    // Update target
+    await db.query(
+      `UPDATE students SET target = $1, assigned_by = $2 WHERE id = $3`,
+      [target, mentor_email, student_id]
+    );
+    
+    res.json({ message: 'Target assigned successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+app.post('/admin/assign-students', authorizeRole('admin'),async (req, res) => {
+  try {
+    const { mentor_id, student_ids } = req.body;
+
+    if (!Array.isArray(student_ids) || student_ids.length === 0) {
+      return res.status(400).json({ error: 'No students selected' });
+    }
+
+    const mentor = await db.query(`
+      SELECT referral_code FROM students
+      WHERE id = $1 AND is_mentor = true
+    `, [mentor_id]);
+
+    if (mentor.rows.length === 0) {
+      return res.status(400).json({ error: 'Invalid mentor ID' });
+    }
+
+    const referral_code = mentor.rows[0].referral_code;
+
+    const assignQuery = `
+      UPDATE students
+      SET assigned_by = $1, referrer_code = $2
+      WHERE id = ANY($3::int[])
+    `;
+    await db.query(assignQuery, [mentor_id, referral_code, student_ids]);
+
+    res.json({ message: 'Students assigned to mentor successfully.' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
 
-// READ all students
-app.get('/students', authenticateToken, authorizeRole('admin'), async (req, res) => {
+// 🎯 Get Students Ready for Promotion
+app.get('/students/ready-for-promotion', async (req, res) => {
   try {
-    const result = await db.query('SELECT * FROM students ORDER BY id DESC');
+    const result = await db.query(
+      `SELECT s.*, 
+       (SELECT first_name || ' ' || last_name FROM students WHERE referral_code = s.referrer_code) as referrer_name
+       FROM students s 
+       WHERE attained >= target AND is_mentor = false AND role = 'student'`
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 📊 List All Students with Referrer Info
+app.get('/students', async (req, res) => {
+  try {
+    const result = await db.query(
+      `SELECT s.*, 
+       (SELECT first_name || ' ' || last_name FROM students WHERE referral_code = s.referrer_code) as referrer_name
+       FROM students s 
+       ORDER BY id DESC`
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 🗑️ Delete Student
+app.delete('/students/:id', async (req, res) => {
+  try {
+    await db.query(`DELETE FROM students WHERE id = $1`, [req.params.id]);
+    res.json({ message: 'Student deleted' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 🏆 New Endpoint: Get Referral Leaderboard
+app.get('/referral/leaderboard', async (req, res) => {
+  try {
+    const result = await db.query(
+      `SELECT 
+        s.id, s.first_name, s.last_name, s.referral_code,
+        COUNT(r.id) as total_referrals,
+        COUNT(r.id) FILTER (WHERE r.status = 'approved') as approved_referrals,
+        COALESCE(SUM(r.attained), 0) as total_attained
+       FROM students s
+       LEFT JOIN students r ON r.referrer_code = s.referral_code
+       WHERE s.status = 'approved'
+       GROUP BY s.id
+       ORDER BY approved_referrals DESC, total_attained DESC
+       LIMIT 50`
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
+app.get('/admin/students', async (req, res) => {
+  try {
+    const result = await db.query(`
+      SELECT 
+        s.*, 
+        r.first_name || ' ' || r.last_name AS referrer_name
+      FROM students s
+      LEFT JOIN students r ON s.referrer_code = r.referral_code
+      ORDER BY s.id DESC
+    `);
     res.json(result.rows);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// READ one student
-app.get('/students/:id', async (req, res) => {
+
+app.get('/admin/mentors', async (req, res) => {
   try {
-    const result = await db.query('SELECT * FROM students WHERE id = $1', [req.params.id]);
-    if (result.rows.length === 0) {
-      res.status(404).json({ error: 'Student not found' });
-    } else {
-      res.json(result.rows[0]);
+    const result = await db.query(`
+      SELECT 
+        m.id AS mentor_id,
+        m.first_name || ' ' || m.last_name AS mentor_name,
+        m.referral_code,
+        COUNT(s.id) AS downline_count,
+        COALESCE(SUM(s.attained), 0) AS total_attained
+      FROM students m
+      LEFT JOIN students s ON s.referrer_code = m.referral_code
+      WHERE m.is_mentor = true
+      GROUP BY m.id
+    `);
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+app.get('/admin/referral-tree/:mentorId', async (req, res) => {
+  const { mentorId } = req.params;
+  try {
+    const mentor = await db.query(`SELECT referral_code FROM students WHERE id = $1 AND is_mentor = true`, [mentorId]);
+    if (mentor.rows.length === 0) {
+      return res.status(404).json({ error: 'Mentor not found' });
     }
+
+    const referral_code = mentor.rows[0].referral_code;
+
+    const downlines = await db.query(`
+      SELECT *
+      FROM students
+      WHERE referrer_code = $1
+    `, [referral_code]);
+
+    res.json(downlines.rows);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// UPDATE student (partial)
-app.put('/students/:id', authenticateToken, authorizeRole('admin'), async (req, res) => {
+
+app.get('/admin/stats', async (req, res) => {
   try {
-    const updates = req.body;
-    const fields = Object.keys(updates);
-    const values = Object.values(updates);
-
-    const setClause = fields.map((field, i) => `${field} = $${i + 1}`).join(', ');
-    const query = `UPDATE students SET ${setClause} WHERE id = $${fields.length + 1}`;
-    values.push(req.params.id);
-
-    await db.query(query, values);
-    res.json({ message: 'Student updated' });
-
+    const result = await db.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE role = 'student') AS total_students,
+        COUNT(*) FILTER (WHERE is_mentor = true) AS total_mentors,
+        COUNT(*) FILTER (WHERE status = 'pending') AS pending_approvals,
+        COUNT(*) FILTER (WHERE status = 'approved') AS approved_students
+      FROM students
+    `);
+    res.json(result.rows[0]);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// DELETE student
-app.delete('/students/:id', authenticateToken, authorizeRole('admin'), async (req, res) => {
+
+app.get('/admin/student/:id', async (req, res) => {
+  const { id } = req.params;
   try {
-    await db.query('DELETE FROM students WHERE id = $1', [req.params.id]);
-    res.json({ message: 'Student deleted' });
+    const student = await db.query(`SELECT * FROM students WHERE id = $1`, [id]);
+    if (student.rows.length === 0) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    let result = { ...student.rows[0] };
+
+    // Optional: Get referrer
+    if (result.referrer_code) {
+      const referrer = await db.query(`SELECT * FROM students WHERE referral_code = $1`, [result.referrer_code]);
+      if (referrer.rows.length > 0) {
+        result.referrer = referrer.rows[0];
+      }
+    }
+
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
+
 
 
 app.post('/visits/untracked', async (req, res) => {
