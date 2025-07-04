@@ -1105,6 +1105,7 @@ app.get('/api/email/:email', async (req, res) => {
 });
 
 
+
 // 📥 APPLY to Internship
 app.post('/api/internships/:id/apply', authenticateToken, async (req, res) => {
   const userId = req.user.id;
@@ -1144,24 +1145,91 @@ app.get('/api/internships/applied', authenticateToken, async (req, res) => {
 });
 
 
+// POST /api/admin/internships/:id/set-payment-qr
+app.post('/api/admin/internships/:id/set-payment-qr', authenticateToken, authorizeRole('admin'), async (req, res) => {
+  const internshipId = req.params.id;
+  const { paymentQr } = req.body;
+  try {
+    await db.query(
+      `UPDATE internships SET payment_qr = $1 WHERE id = $2`,
+      [paymentQr, internshipId]
+    );
+    res.json({ message: 'Payment QR updated' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+// POST /api/internships/:id/submit-payment
+app.post('/api/internships/:id/submit-payment', authenticateToken, async (req, res) => {
+  const userId = req.user.id;
+  const internshipId = req.params.id;
+  const { transactionNo } = req.body;
+
+  try {
+    const result = await db.query(
+      `UPDATE applications
+       SET transaction_no = $1, payment_status = 'paid'
+       WHERE user_id = $2 AND internship_id = $3 RETURNING *`,
+      [transactionNo, userId, internshipId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: 'Application not found' });
+    }
+
+    res.json({ message: 'Transaction submitted. Awaiting verification.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+// POST /api/admin/applications/:id/verify-payment
+app.post('/api/admin/applications/:id/verify-payment', authenticateToken, authorizeRole('admin'), async (req, res) => {
+  const applicationId = req.params.id;
+  try {
+    const result = await db.query(
+      `UPDATE applications
+       SET payment_status = 'verified', status = 'approved'
+       WHERE id = $1 RETURNING *`,
+      [applicationId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: 'Application not found' });
+    }
+
+    res.json({ message: 'Payment verified and application approved.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
 
 // 📄 ADMIN: View all applications
 app.get('/api/admin/applications', authenticateToken, authorizeRole('admin'), async (req, res) => {
   try {
     const result = await db.query(`
-  SELECT 
-    a.id, 
-    u.id AS user_id,          -- ✅ add this
-    u.name AS student_name, 
-    u.email, 
-    i.company_name, 
-    i.position, 
-    a.applied_at,
-    a.status                  -- ✅ include status if needed
-  FROM applications a
-  JOIN users u ON u.id = a.user_id
-  JOIN internships i ON i.id = a.internship_id
-  ORDER BY a.applied_at DESC
+ SELECT 
+  a.id, 
+  u.id AS user_id,
+  u.name AS student_name, 
+  u.email, 
+  i.company_name, 
+  i.position, 
+  a.applied_at,
+  a.status,
+  a.transaction_no,
+  a.payment_status
+FROM applications a
+JOIN users u ON u.id = a.user_id
+JOIN internships i ON i.id = a.internship_id
+ORDER BY a.applied_at DESC
+
 `);
     res.json(result.rows);
   } catch (err) {
