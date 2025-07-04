@@ -284,6 +284,7 @@ app.get('/api/userpayments', authenticateToken, async (req, res) => {
         p.registration_data,
         p.transaction_id,
         p.payment_verified,
+        p.referral_code AS referral_code,
         p.verified_at,
         p.registered_at,
         e.event_fee
@@ -318,6 +319,7 @@ app.get('/api/payments', authenticateToken, authorizeRole('admin'), async (req, 
         e.event_fee,
         p.registration_data,
         p.transaction_id,
+        p.referral_code AS referral_code,
         p.payment_verified,
         p.verified_at,
         p.registered_at
