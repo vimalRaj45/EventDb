@@ -1371,6 +1371,8 @@ app.get('/api/users/:id', authenticateToken, authorizeRole('admin'), async (req,
 //std referer 
 
 
+
+
 // 🔄 Enhanced Referral Code Generator
 function generateReferralCode() {
   const prefix = 'ID';
@@ -1819,6 +1821,243 @@ app.get('/admin/student/:id', async (req, res) => {
     res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+
+app.get('/report/:referrerCode', async (req, res) => {
+  const referrerCode = req.params.referrerCode;
+
+  try {
+    // 1. Referrer name
+    const referrerResult = await db.query(
+      `SELECT first_name, last_name
+       FROM students
+       WHERE referral_code = $1
+       LIMIT 1`,
+      [referrerCode]
+    );
+
+    const referrerName = referrerResult.rows[0]
+      ? `${referrerResult.rows[0].first_name} ${referrerResult.rows[0].last_name}`
+      : 'Unknown';
+
+    // 2. Students referred by this code
+    const referredResult = await db.query(
+      `SELECT id, first_name, last_name, attained
+       FROM students
+       WHERE referrer_code = $1`,
+      [referrerCode]
+    );
+
+    const referredStudents = referredResult.rows.map(s => ({
+      id: s.id,
+      name: `${s.first_name} ${s.last_name}`,
+      attained: s.attained || 0
+    }));
+
+    const totalAttained = referredStudents.reduce((sum, s) => sum + s.attained, 0);
+
+    // 3. Students with no referrer (not mentor or admin)
+    const noReferrerResult = await db.query(
+      `SELECT id, first_name, last_name, attained
+       FROM students
+       WHERE (referrer_code IS NULL OR TRIM(referrer_code) = '')
+         AND is_mentor = false
+         AND role != 'admin'`
+    );
+
+    const noReferrerStudents = noReferrerResult.rows.map(s => ({
+      id: s.id,
+      name: `${s.first_name} ${s.last_name}`,
+      attained: s.attained || 0
+    }));
+
+    // 4. Response
+    res.json({
+      referrer_code: referrerCode,
+      referrer_name: referrerName,
+      total_referred_students: referredStudents.length,
+      total_attained_by_referred: totalAttained,
+      referred_students: referredStudents,
+      students_without_referrer: noReferrerStudents
+    });
+
+  } catch (err) {
+    console.error('Error fetching report:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+
+app.get('/api/referral-data', async (req, res) => {
+  try {
+    // Get all referrers (mentors or admins)
+    const referrersQuery = await db.query(`
+      SELECT 
+        id, 
+        first_name, 
+        last_name, 
+        email, 
+        college_name, 
+        referral_code, 
+        attained,
+        is_mentor,
+        role
+      FROM students 
+      WHERE is_mentor = true OR role = 'admin'
+    `);
+    const referrers = referrersQuery.rows;
+
+    // Get all students (excluding mentors and admins)
+    const studentsQuery = await db.query(`
+      SELECT 
+        id, 
+        first_name, 
+        last_name, 
+        email, 
+        college_name, 
+        status, 
+        referrer_code
+      FROM students 
+      WHERE is_mentor = false AND role = 'student'
+    `);
+    const students = studentsQuery.rows;
+
+    // Process each referrer to find their referred students
+    const processedReferrers = await Promise.all(referrers.map(async (referrer) => {
+      const referredStudentsQuery = await db.query(
+        `SELECT id, first_name, last_name, email, college_name, status 
+         FROM students 
+         WHERE referrer_code = $1`,
+        [referrer.referral_code]
+      );
+      const referredStudents = referredStudentsQuery.rows;
+
+      return {
+        id: referrer.id,
+        name: `${referrer.first_name} ${referrer.last_name}`,
+        email: referrer.email,
+        referral_code: referrer.referral_code,
+        total_referred: referredStudents.length,
+        total_attained: referrer.attained || 0,
+        referred_students: referredStudents
+      };
+    }));
+
+    // Find students without valid referral codes
+    const activeReferralCodes = referrers.map(r => r.referral_code);
+    const studentsWithoutReferral = students.filter(student => {
+      return !student.referrer_code || !activeReferralCodes.includes(student.referrer_code);
+    });
+
+    // Summary
+    const summary = {
+      total_referrers: referrers.length,
+      total_students: students.length,
+      total_with_referral: students.length - studentsWithoutReferral.length,
+      total_without_referral: studentsWithoutReferral.length,
+      total_attained: referrers.reduce((sum, r) => sum + (r.attained || 0), 0)
+    };
+
+    // Final Response
+    const response = {
+      success: true,
+      data: {
+        referrers: processedReferrers,
+        students_without_referral: studentsWithoutReferral.map(s => ({
+          id: s.id,
+          name: `${s.first_name} ${s.last_name}`,
+          email: s.email,
+          college: s.college_name,
+          status: s.status,
+          invalid_referrer_code: s.referrer_code && !activeReferralCodes.includes(s.referrer_code)
+            ? s.referrer_code
+            : null
+        })),
+        summary
+      }
+    };
+
+    res.json(response);
+
+  } catch (error) {
+    console.error('Referral data error:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch referral data',
+      details: error.message
+    });
+  }
+});
+
+
+
+// 🎯 Admin Sets Target for Any User
+app.post('/admin/set-target',async (req, res) => {
+  try {
+    const { user_id, target, is_mentor } = req.body;
+    
+    // Validate input
+    if (!user_id || target === undefined || target === null) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Check if user exists
+    const userCheck = await db.query(
+      `SELECT id FROM students WHERE id = $1`,
+      [user_id]
+    );
+    
+    if (userCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Update target
+    await db.query(
+      `UPDATE students SET target = $1 WHERE id = $2`,
+      [target, user_id]
+    );
+
+    // If this is a mentor and they've reached their target, promote them
+    if (is_mentor) {
+      const user = await db.query(
+        `SELECT attained, target, is_mentor FROM students WHERE id = $1`,
+        [user_id]
+      );
+      
+      if (user.rows[0].attained >= target && !user.rows[0].is_mentor) {
+        await db.query(
+          `UPDATE students SET is_mentor = true, role = 'mentor' WHERE id = $1`,
+          [user_id]
+        );
+      }
+    }
+
+    res.json({ message: 'Target set successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 🎯 Get All Targets
+app.get('/admin/targets', async (req, res) => {
+  try {
+    const result = await db.query(`
+      SELECT 
+        id,
+        first_name || ' ' || last_name as name,
+        role,
+        target,
+        attained,
+        (attained >= target) as target_achieved
+      FROM students
+      WHERE status = 'approved'
+      ORDER BY role DESC, name ASC
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
