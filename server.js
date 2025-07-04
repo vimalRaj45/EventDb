@@ -2108,6 +2108,131 @@ app.post('/students/increment-attained', async (req, res) => {
 
 
 
+// API Routes
+app.get('/api/announcements', async (req, res) => {
+    try {
+        const { active, priority, category, limit, page } = req.query;
+        
+        let query = 'SELECT * FROM announcements';
+        const conditions = [];
+        const params = [];
+        let paramIndex = 1;
+        
+        if (active === 'true') {
+            conditions.push(`is_active = $${paramIndex++}`);
+            params.push(true);
+        }
+        
+        if (priority) {
+            conditions.push(`priority = $${paramIndex++}`);
+            params.push(parseInt(priority));
+        }
+        
+        if (category) {
+            conditions.push(`$${paramIndex++} = ANY(categories)`);
+            params.push(category);
+        }
+        
+        if (conditions.length > 0) {
+            query += ' WHERE ' + conditions.join(' AND ');
+        }
+        
+        query += ' ORDER BY priority ASC, created_at DESC';
+        
+        // Add pagination if requested
+        if (limit && page) {
+            const offset = (parseInt(page) - 1) * parseInt(limit);
+            query += ` LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
+            params.push(parseInt(limit), offset);
+        }
+        
+        const result = await db.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error fetching announcements:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.get('/api/announcements/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const result = await db.query('SELECT * FROM announcements WHERE id = $1', [id]);
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Announcement not found' });
+        }
+        
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error('Error fetching announcement:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.post('/api/announcements', authorizeRole('admin'), async (req, res) => {
+    try {
+        const { title, content, author, priority, end_date, is_active, categories } = req.body;
+        
+        const result = await db.query(
+            `INSERT INTO announcements 
+             (title, content, author, priority, end_date, is_active, categories) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7) 
+             RETURNING *`,
+            [title, content, author, priority, end_date, is_active, categories]
+        );
+        
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        console.error('Error creating announcement:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.put('/api/announcements/:id', authorizeRole('admin'), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { title, content, author, priority, end_date, is_active, categories } = req.body;
+        
+        const result = await db.query(
+            `UPDATE announcements 
+             SET title = $1, content = $2, author = $3, priority = $4, 
+                 end_date = $5, is_active = $6, categories = $7 
+             WHERE id = $8 
+             RETURNING *`,
+            [title, content, author, priority, end_date, is_active, categories, id]
+        );
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Announcement not found' });
+        }
+        
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error('Error updating announcement:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.delete('/api/announcements/:id', authorizeRole('admin'), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const result = await db.query('DELETE FROM announcements WHERE id = $1 RETURNING *', [id]);
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Announcement not found' });
+        }
+        
+        res.json({ message: 'Announcement deleted successfully' });
+    } catch (err) {
+        console.error('Error deleting announcement:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+
+
+
 
 
 
