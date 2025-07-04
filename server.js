@@ -1146,7 +1146,7 @@ app.get('/api/internships/applied', authenticateToken, async (req, res) => {
 
 
 // POST /api/admin/internships/:id/set-payment-qr
-app.post('/api/admin/internships/:id/set-payment-qr', authenticateToken, authorizeRole('admin'), async (req, res) => {
+app.post('/api/admin/internships/:id/set-payment-qr', async (req, res) => {
   const internshipId = req.params.id;
   const { paymentQr } = req.body;
   try {
@@ -1159,7 +1159,6 @@ app.post('/api/admin/internships/:id/set-payment-qr', authenticateToken, authori
     res.status(500).json({ error: err.message });
   }
 });
-
 
 // POST /api/internships/:id/submit-payment
 app.post('/api/internships/:id/submit-payment', authenticateToken, async (req, res) => {
