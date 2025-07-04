@@ -1474,7 +1474,7 @@ app.post('/students', upload.fields([
 });
 
 // ✅ Enhanced Admin Approves Student with Referral Tracking
-app.put('/students/approve/:id', authorizeRole('admin'), async (req, res) => {
+app.put('/students/approve/:id', async (req, res) => {
   try {
     const referral_code = generateReferralCode();
     const query = `
@@ -1525,7 +1525,7 @@ app.put('/students/approve/:id', authorizeRole('admin'), async (req, res) => {
 });
 
 // 🧑‍🏫 Admin Creates Mentor
-app.post('/admin/create-mentor', authorizeRole('admin'), async (req, res) => {
+app.post('/admin/create-mentor', async (req, res) => {
   try {
     const { first_name, last_name, gender, contact_number, whatsapp_number, email, college_name, study_year, district, payment_method, payment_number } = req.body;
     const check = await db.query(`SELECT id FROM students WHERE contact_number = $1 OR email = $2`, [contact_number, email]);
@@ -1580,7 +1580,7 @@ app.get('/students/referral-tree/:code', async (req, res) => {
 });
 
 // 🧍 Promote to Mentor
-app.put('/students/promote/:id', authorizeRole('admin'), async (req, res) => {
+app.put('/students/promote/:id',  async (req, res) => {
   try {
     const query = `UPDATE students SET is_mentor = true, role = 'mentor' WHERE id = $1 RETURNING *`;
     const result = await db.query(query, [req.params.id]);
@@ -1630,7 +1630,7 @@ app.post('/mentors/assign-target', async (req, res) => {
 });
 
 
-app.post('/admin/assign-students', authorizeRole('admin'),async (req, res) => {
+app.post('/admin/assign-students', async (req, res) => {
   try {
     const { mentor_id, student_ids } = req.body;
 
@@ -2170,7 +2170,7 @@ app.get('/api/announcements/:id', async (req, res) => {
     }
 });
 
-app.post('/api/announcements', authorizeRole('admin'), async (req, res) => {
+app.post('/api/announcements',  async (req, res) => {
     try {
         const { title, content, author, priority, end_date, is_active, categories } = req.body;
         
@@ -2189,7 +2189,7 @@ app.post('/api/announcements', authorizeRole('admin'), async (req, res) => {
     }
 });
 
-app.put('/api/announcements/:id', authorizeRole('admin'), async (req, res) => {
+app.put('/api/announcements/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const { title, content, author, priority, end_date, is_active, categories } = req.body;
@@ -2214,7 +2214,7 @@ app.put('/api/announcements/:id', authorizeRole('admin'), async (req, res) => {
     }
 });
 
-app.delete('/api/announcements/:id', authorizeRole('admin'), async (req, res) => {
+app.delete('/api/announcements/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const result = await db.query('DELETE FROM announcements WHERE id = $1 RETURNING *', [id]);
