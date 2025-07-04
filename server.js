@@ -1,4 +1,5 @@
 
+
 require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -358,11 +359,12 @@ app.delete('/api/events/:id', authenticateToken, authorizeRole('admin'), async (
 app.post('/api/events/:id/register', authenticateToken, async (req, res) => {
   const eventId = req.params.id;
   const userId = req.user.id;
+const {
+  registration_data = {},
+  transaction_id = null,
+  referral_code = null // Add this line
+} = req.body;
 
-  const {
-    registration_data = {},
-    transaction_id = null // Add transaction_id from request body
-  } = req.body;
 
   try {
     // Check if event exists and is open for registration
@@ -397,12 +399,13 @@ app.post('/api/events/:id/register', authenticateToken, async (req, res) => {
 
     // Register participant with transaction_id
     const { rows } = await db.query(
-      `INSERT INTO participants 
-        (user_id, event_id, registration_data, transaction_id)
-       VALUES ($1, $2, $3, $4)
-       RETURNING *`,
-      [userId, eventId, registration_data, transaction_id]
-    );
+  `INSERT INTO participants 
+    (user_id, event_id, registration_data, transaction_id, referral_code)
+   VALUES ($1, $2, $3, $4, $5)
+   RETURNING *`,
+  [userId, eventId, registration_data, transaction_id, referral_code]
+);
+
 
     // Increment current_participants count
     await db.query(
