@@ -2300,6 +2300,113 @@ app.delete('/api/announcements/:id', async (req, res) => {
 
 
 
+// 🔽 1. Download participants as CSV
+app.get('/api/events/:eventId/participants-csv', async (req, res) => {
+  const { eventId } = req.params;
+
+  try {
+    const query = `
+      SELECT u.id AS participant_id, u.name, u.email, p.event_id
+      FROM participants p
+      JOIN users u ON u.id = p.user_id
+      WHERE p.event_id = $1
+    `;
+    const { rows } = await db.query(query, [eventId]);
+
+    if (!rows.length) return res.status(404).send('No participants found');
+
+    let csv = 'participant_id,name,email,event_id\n';
+    rows.forEach(r => {
+      csv += `${r.participant_id},"${r.name}","${r.email}",${r.event_id}\n`;
+    });
+
+    res.header('Content-Type', 'text/csv');
+    res.attachment(`participants_event_${eventId}.csv`);
+    res.send(csv);
+  } catch (err) {
+    console.error('CSV error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+
+app.post('/api/certificates/generate', async (req, res) => {
+  const { sheetId, sheetName, templateId, folderId, eventId } = req.body;
+
+  if (!sheetId || !sheetName || !templateId || !folderId || !eventId) {
+    return res.status(400).json({ success: false, error: 'Missing required fields in request body.' });
+  }
+
+  const skipped = [];
+  const inserted = [];
+
+  try {
+    const scriptUrl = `https://script.google.com/macros/s/AKfycby1BU8ksPS2BEbhe9wRukwuNXL7cJx6dILvVciWaBtVKUYYuyX0jSxTgZmt2NnOhuhG/exec`;
+    const fullUrl = `${scriptUrl}?sheetId=${sheetId.trim()}&sheetName=${sheetName.trim()}&templateId=${templateId.trim()}&folderId=${folderId.trim()}`;
+
+    const response = await fetch(fullUrl);
+
+    let result;
+    try {
+      result = await response.json();
+    } catch (err) {
+      const html = await response.text();
+      console.error('❌ Apps Script returned non-JSON:', html);
+      return res.status(500).json({ success: false, error: 'Apps Script did not return valid JSON.' });
+    }
+
+    if (!result || !Array.isArray(result.certificates)) {
+      return res.status(500).json({
+        success: false,
+        error: 'Certificates data missing or not in expected format.'
+      });
+    }
+
+    const certificates = result.certificates;
+
+    for (const cert of certificates) {
+      const { email, url, uniqueCode } = cert;
+
+      const queryResult = await db.query(`
+        SELECT p.id FROM participants p
+        JOIN users u ON u.id = p.user_id
+        WHERE u.email = $1 AND p.event_id = $2
+      `, [email, eventId]);
+
+      if (!queryResult.rows.length) {
+        console.warn(`⚠ Skipped: No participant found for ${email}`);
+        skipped.push({ email, reason: 'Participant not found in database' });
+        continue;
+      }
+
+      const participantId = queryResult.rows[0].id;
+
+      const insertResult = await db.query(`
+        INSERT INTO certificates (event_id, participant_id, certificate_url, unique_code, issued_at)
+        VALUES ($1, $2, $3, $4, NOW())
+        ON CONFLICT (event_id, participant_id) DO NOTHING
+        RETURNING *
+      `, [eventId, participantId, url, uniqueCode]);
+
+      if (insertResult.rows.length > 0) {
+        inserted.push({ email, url });
+      } else {
+        skipped.push({ email, reason: 'Certificate already exists' });
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: `${inserted.length} inserted, ${skipped.length} skipped.`,
+      inserted,
+      skipped
+    });
+
+  } catch (error) {
+    console.error('❌ Server error:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 
 
