@@ -2329,7 +2329,6 @@ app.get('/api/events/:eventId/participants-csv', async (req, res) => {
   }
 });
 
-
 app.post('/api/certificates/generate', async (req, res) => {
   const { sheetId, sheetName, templateId, folderId, eventId } = req.body;
 
@@ -2339,60 +2338,70 @@ app.post('/api/certificates/generate', async (req, res) => {
 
   const skipped = [];
   const inserted = [];
+  const chunkSize = 20; // Adjust chunk size as needed
+  const scriptUrl = `https://script.google.com/macros/s/AKfycby1BU8ksPS2BEbhe9wRukwuNXL7cJx6dILvVciWaBtVKUYYuyX0jSxTgZmt2NnOhuhG/exec`;
 
   try {
-    const scriptUrl = `https://script.google.com/macros/s/AKfycby1BU8ksPS2BEbhe9wRukwuNXL7cJx6dILvVciWaBtVKUYYuyX0jSxTgZmt2NnOhuhG/exec`;
-    const fullUrl = `${scriptUrl}?sheetId=${sheetId.trim()}&sheetName=${sheetName.trim()}&templateId=${templateId.trim()}&folderId=${folderId.trim()}`;
+    let start = 0;
+    let hasMore = true;
 
-    const response = await fetch(fullUrl);
+    while (hasMore) {
+      const fullUrl = `${scriptUrl}?sheetId=${sheetId.trim()}&sheetName=${sheetName.trim()}&templateId=${templateId.trim()}&folderId=${folderId.trim()}&start=${start}&limit=${chunkSize}`;
 
-    let result;
-    try {
-      result = await response.json();
-    } catch (err) {
-      const html = await response.text();
-      console.error('❌ Apps Script returned non-JSON:', html);
-      return res.status(500).json({ success: false, error: 'Apps Script did not return valid JSON.' });
-    }
+      const response = await fetch(fullUrl);
 
-    if (!result || !Array.isArray(result.certificates)) {
-      return res.status(500).json({
-        success: false,
-        error: 'Certificates data missing or not in expected format.'
-      });
-    }
-
-    const certificates = result.certificates;
-
-    for (const cert of certificates) {
-      const { email, url, uniqueCode } = cert;
-
-      const queryResult = await db.query(`
-        SELECT p.id FROM participants p
-        JOIN users u ON u.id = p.user_id
-        WHERE u.email = $1 AND p.event_id = $2
-      `, [email, eventId]);
-
-      if (!queryResult.rows.length) {
-        console.warn(`⚠ Skipped: No participant found for ${email}`);
-        skipped.push({ email, reason: 'Participant not found in database' });
-        continue;
+      let result;
+      try {
+        result = await response.json();
+      } catch (err) {
+        const html = await response.text();
+        console.error('❌ Apps Script returned non-JSON:', html);
+        return res.status(500).json({ success: false, error: 'Apps Script did not return valid JSON.' });
       }
 
-      const participantId = queryResult.rows[0].id;
-
-      const insertResult = await db.query(`
-        INSERT INTO certificates (event_id, participant_id, certificate_url, unique_code, issued_at)
-        VALUES ($1, $2, $3, $4, NOW())
-        ON CONFLICT (event_id, participant_id) DO NOTHING
-        RETURNING *
-      `, [eventId, participantId, url, uniqueCode]);
-
-      if (insertResult.rows.length > 0) {
-        inserted.push({ email, url });
-      } else {
-        skipped.push({ email, reason: 'Certificate already exists' });
+      if (!result || !Array.isArray(result.certificates)) {
+        hasMore = false;
+        break;
       }
+
+      const certificates = result.certificates;
+      if (certificates.length === 0) {
+        hasMore = false;
+        break;
+      }
+
+      for (const cert of certificates) {
+        const { email, url, uniqueCode } = cert;
+
+        const queryResult = await db.query(`
+          SELECT p.id FROM participants p
+          JOIN users u ON u.id = p.user_id
+          WHERE u.email = $1 AND p.event_id = $2
+        `, [email, eventId]);
+
+        if (!queryResult.rows.length) {
+          console.warn(`⚠ Skipped: No participant found for ${email}`);
+          skipped.push({ email, reason: 'Participant not found in database' });
+          continue;
+        }
+
+        const participantId = queryResult.rows[0].id;
+
+        const insertResult = await db.query(`
+          INSERT INTO certificates (event_id, participant_id, certificate_url, unique_code, issued_at)
+          VALUES ($1, $2, $3, $4, NOW())
+          ON CONFLICT (event_id, participant_id) DO NOTHING
+          RETURNING *
+        `, [eventId, participantId, url, uniqueCode]);
+
+        if (insertResult.rows.length > 0) {
+          inserted.push({ email, url });
+        } else {
+          skipped.push({ email, reason: 'Certificate already exists' });
+        }
+      }
+
+      start += chunkSize;
     }
 
     return res.json({
