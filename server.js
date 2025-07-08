@@ -1594,19 +1594,54 @@ app.put('/students/approve/:id', async (req, res) => {
 // 🧑‍🏫 Admin Creates Mentor
 app.post('/admin/create-mentor', async (req, res) => {
   try {
-    const { first_name, last_name, gender, contact_number, whatsapp_number, email, college_name, study_year, district, payment_method, payment_number } = req.body;
-    const check = await db.query(`SELECT id FROM students WHERE contact_number = $1 OR email = $2`, [contact_number, email]);
-    if (check.rows.length > 0) return res.status(409).json({ error: 'Mentor already exists.' });
+    const {
+      first_name,
+      last_name,
+      gender,
+      contact_number,
+      whatsapp_number,
+      email,
+      college_name,
+      study_year,
+      district,
+      payment_method,
+      payment_number,
+      admin_intern_target = 0,
+      admin_intern_attained = 0
+    } = req.body;
+
+    const check = await db.query(
+      `SELECT id FROM students WHERE contact_number = $1 OR email = $2`,
+      [contact_number, email]
+    );
+    if (check.rows.length > 0) {
+      return res.status(409).json({ error: 'Mentor already exists.' });
+    }
 
     const referral_code = generateReferralCode();
-    const insert = `INSERT INTO students (first_name, last_name, gender, contact_number, whatsapp_number, email, college_name, study_year, district, referral_code, payment_method, payment_number, status, is_mentor, role) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'approved',true,'mentor') RETURNING *`;
-    const result = await db.query(insert, [first_name, last_name, gender, contact_number, whatsapp_number, email, college_name, study_year, district, referral_code, payment_method, payment_number]);
+
+    const insert = `
+      INSERT INTO students (
+        first_name, last_name, gender, contact_number, whatsapp_number, email,
+        college_name, study_year, district, referral_code, payment_method, payment_number,
+        status, is_mentor, role, admin_intern_target, admin_intern_attained
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'approved',true,'mentor',$13,$14)
+      RETURNING *`;
+
+    const result = await db.query(insert, [
+      first_name, last_name, gender, contact_number, whatsapp_number, email,
+      college_name, study_year, district, referral_code, payment_method, payment_number,
+      admin_intern_target, admin_intern_attained
+    ]);
 
     res.json({ message: 'Mentor created', mentor: result.rows[0] });
+
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
+
 
 // 📥 Enhanced Referral Tree with Performance Metrics
 app.get('/students/referral-tree/:code', async (req, res) => {
@@ -2066,63 +2101,69 @@ app.get('/api/referral-data', async (req, res) => {
 
 
 // 🎯 Admin Sets Target for Any User
-app.post('/admin/set-target',async (req, res) => {
+// 🎯 Admin Sets Target (student target + mentor intern target)
+app.post('/admin/set-target', async (req, res) => {
   try {
-    const { user_id, target, is_mentor } = req.body;
-    
-    // Validate input
+    const { user_id, target, is_mentor, admin_intern_target } = req.body;
+
     if (!user_id || target === undefined || target === null) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // Check if user exists
-    const userCheck = await db.query(
-      `SELECT id FROM students WHERE id = $1`,
+    // Check if user exists and get role
+    const userResult = await db.query(
+      `SELECT id, attained, target, is_mentor, role FROM students WHERE id = $1`,
       [user_id]
     );
-    
-    if (userCheck.rows.length === 0) {
+    if (userResult.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Update target
-    await db.query(
-      `UPDATE students SET target = $1 WHERE id = $2`,
-      [target, user_id]
-    );
+    // Build update fields dynamically
+    const fields = [`target = $1`];
+    const values = [target];
+    let paramIdx = 2;
 
-    // If this is a mentor and they've reached their target, promote them
-    if (is_mentor) {
-      const user = await db.query(
-        `SELECT attained, target, is_mentor FROM students WHERE id = $1`,
-        [user_id]
-      );
-      
-      if (user.rows[0].attained >= target && !user.rows[0].is_mentor) {
-        await db.query(
-          `UPDATE students SET is_mentor = true, role = 'mentor' WHERE id = $1`,
-          [user_id]
-        );
-      }
+    if (is_mentor && typeof admin_intern_target === 'number') {
+      fields.push(`admin_intern_target = $${paramIdx++}`);
+      values.push(admin_intern_target);
     }
 
-    res.json({ message: 'Target set successfully' });
+    values.push(user_id);
+    const updateQuery = `UPDATE students SET ${fields.join(', ')} WHERE id = $${paramIdx}`;
+    await db.query(updateQuery, values);
+
+    // Promote to mentor if eligible
+    const user = userResult.rows[0];
+    if (is_mentor && user.attained >= target && !user.is_mentor) {
+      await db.query(
+        `UPDATE students SET is_mentor = true, role = 'mentor' WHERE id = $1`,
+        [user_id]
+      );
+    }
+
+    res.json({ message: 'Target(s) set successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
+
 // 🎯 Get All Targets
+// 🎯 Get All Targets + Internship Target Tracking
 app.get('/admin/targets', async (req, res) => {
   try {
     const result = await db.query(`
       SELECT 
         id,
-        first_name || ' ' || last_name as name,
+        first_name || ' ' || last_name AS name,
         role,
         target,
         attained,
-        (attained >= target) as target_achieved
+        (attained >= target) AS target_achieved,
+        admin_intern_target,
+        admin_intern_attained,
+        (admin_intern_attained >= admin_intern_target) AS intern_target_achieved
       FROM students
       WHERE status = 'approved'
       ORDER BY role DESC, name ASC
@@ -2132,6 +2173,9 @@ app.get('/admin/targets', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+
+
 
 
 
@@ -2172,6 +2216,52 @@ app.post('/students/increment-attained', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+
+// 🚀 Increment Mentor + Upline admin_intern_attained by 1
+app.post('/referrals/increment-intern-chain', async (req, res) => {
+  try {
+    const { used_referral_code } = req.body;
+
+    if (!used_referral_code) {
+      return res.status(400).json({ error: 'Referral code is required' });
+    }
+
+    // 🔍 Get the mentor who owns the referral code
+    const mentor = await db.query(
+      `SELECT id, referrer_code, role FROM students WHERE referral_code = $1`,
+      [used_referral_code]
+    );
+
+    if (mentor.rows.length === 0) {
+      return res.status(404).json({ error: 'Referral code not found' });
+    }
+
+    const mentorId = mentor.rows[0].id;
+    const uplineRefCode = mentor.rows[0].referrer_code;
+
+    // ✅ Increment mentor's intern attainment
+    await db.query(
+      `UPDATE students SET admin_intern_attained = admin_intern_attained + 1 WHERE id = $1 AND role = 'mentor'`,
+      [mentorId]
+    );
+
+    // ✅ If mentor has an upline mentor, increment their attainment too
+    if (uplineRefCode) {
+      await db.query(
+        `UPDATE students SET admin_intern_attained = admin_intern_attained + 1 
+         WHERE referral_code = $1 AND role = 'mentor'`,
+        [uplineRefCode]
+      );
+    }
+
+    res.json({ message: 'Intern attainment incremented for mentor and upline (if any)' });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 
 
