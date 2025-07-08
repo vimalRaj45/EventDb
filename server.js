@@ -1160,29 +1160,101 @@ app.post('/api/admin/internships/:id/set-payment-qr', async (req, res) => {
   }
 });
 
-// POST /api/internships/:id/submit-payment
+
+
+// 💳 SUBMIT PAYMENT and trigger APPLY if needed
+// 💳 SUBMIT PAYMENT and trigger APPLY if needed
 app.post('/api/internships/:id/submit-payment', authenticateToken, async (req, res) => {
   const userId = req.user.id;
   const internshipId = req.params.id;
-  const { transactionNo } = req.body;
+  const { transactionNo, referralCode } = req.body;
+
+  console.log('💳 [submit-payment] Start');
+  console.log('➡️ User ID:', userId);
+  console.log('➡️ Internship ID:', internshipId);
+  console.log('➡️ Transaction No:', transactionNo);
+  console.log('➡️ Referral Code from frontend:', referralCode);
+
+  if (!transactionNo) {
+    return res.status(400).json({ message: 'Transaction number is required' });
+  }
 
   try {
-    const result = await db.query(
-      `UPDATE applications
-       SET transaction_no = $1, payment_status = 'paid'
-       WHERE user_id = $2 AND internship_id = $3 RETURNING *`,
-      [transactionNo, userId, internshipId]
+    // ✅ Check if user already applied
+    const existingApp = await db.query(
+      `SELECT id FROM applications WHERE user_id = $1 AND internship_id = $2`,
+      [userId, internshipId]
     );
 
-    if (result.rowCount === 0) {
-      return res.status(404).json({ message: 'Application not found' });
+    let referralCodeUsed = referralCode;
+
+    // If not applied, insert application
+    if (existingApp.rows.length === 0) {
+      const userResult = await db.query(
+        `SELECT referral_code FROM students WHERE id = $1`,
+        [userId]
+      );
+
+      if (userResult.rows.length === 0) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      // Use fallback referral code from DB
+      if (!referralCodeUsed) {
+        referralCodeUsed = userResult.rows[0].referral_code;
+        console.log('🧠 Referral Code fallback from DB:', referralCodeUsed);
+      }
+
+      const applyResult = await db.query(
+        `INSERT INTO applications (user_id, internship_id, referral_code)
+         VALUES ($1, $2, $3)
+         RETURNING id`,
+        [userId, internshipId, referralCodeUsed]
+      );
+
+      if (applyResult.rowCount === 0) {
+        return res.status(500).json({ message: 'Failed to apply while submitting payment' });
+      }
+
+      console.log('✅ New application inserted with referral:', referralCodeUsed);
+    } else {
+      // ✅ Update referralCode if missing (in case application already exists)
+      if (!referralCodeUsed) {
+        const userResult = await db.query(
+          `SELECT referral_code FROM students WHERE id = $1`,
+          [userId]
+        );
+        if (userResult.rows.length > 0) {
+          referralCodeUsed = userResult.rows[0].referral_code;
+        }
+      }
     }
 
-    res.json({ message: 'Transaction submitted. Awaiting verification.' });
+    // ✅ Update payment details + referral_code
+    await db.query(
+      `UPDATE applications
+       SET payment_status = 'paid',
+           transaction_no = $1,
+           referral_code = $4
+       WHERE user_id = $2 AND internship_id = $3`,
+      [transactionNo, userId, internshipId, referralCodeUsed]
+    );
+
+    console.log('💰 Payment & referral updated for user:', userId);
+
+    res.json({
+      message: 'Payment submitted and application confirmed',
+      referralCodeUsed
+    });
+
   } catch (err) {
+    console.error('❌ Submit payment error:', err);
     res.status(500).json({ error: err.message });
   }
 });
+
+
+
 
 
 // POST /api/admin/applications/:id/verify-payment
