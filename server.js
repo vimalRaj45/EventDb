@@ -1366,15 +1366,16 @@ app.post('/api/auth/reset-password/:token', async (req, res) => {
 });
 
 // 📥 CREATE Internship (only logged-in user can create)
-app.post('/api/internships', authenticateToken, async (req, res) => {
+app.post('/api/internships', authenticateToken, authorizeRole('admin'), async (req, res) => {
   const userId = req.user.id;
-  const { company_name, position, duration, start_date, end_date, imgurl} = req.body;
+  const { company_name, position, duration, start_date, end_date, imgurl, desc } = req.body;
+
   try {
     const result = await db.query(
       `INSERT INTO internships 
-        (user_id, company_name, position, duration, start_date, end_date, imgurl)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-      [userId, company_name, position, duration, start_date, end_date, imgurl]
+        (user_id, company_name, position, duration, start_date, end_date, imgurl, "desc")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      [userId, company_name, position, duration, start_date, end_date, imgurl, desc]
     );
     res.json(result.rows[0]);
   } catch (err) {
@@ -1426,7 +1427,8 @@ app.put('/api/internships/:id', authenticateToken, authorizeRole('admin'), async
       start_date,
       end_date,
       imgurl,
-      status // 👈 include status too
+      status,
+      desc
     } = req.body;
 
     const result = await db.query(
@@ -1437,9 +1439,10 @@ app.put('/api/internships/:id', authenticateToken, authorizeRole('admin'), async
         start_date = $4,
         end_date = $5,
         imgurl = $6,
-        status = $7
-      WHERE id = $8 RETURNING *`,
-      [company_name, position, duration, start_date, end_date, imgurl, status, id]
+        status = $7,
+        "desc" = $8
+      WHERE id = $9 RETURNING *`,
+      [company_name, position, duration, start_date, end_date, imgurl, status, desc, id]
     );
 
     res.json(result.rows[0]);
@@ -1448,6 +1451,7 @@ app.put('/api/internships/:id', authenticateToken, authorizeRole('admin'), async
     res.status(500).json({ error: err.message });
   }
 });
+
 
 
 // ❌ DELETE Internship (DELETE)
