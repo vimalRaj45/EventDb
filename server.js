@@ -1280,33 +1280,33 @@ app.post('/api/admin/applications/:id/verify-payment', authenticateToken, author
 
 
 
-
-// 📄 ADMIN: View all applications
+// 📄 ADMIN: View all applications (with referral_code from applications table)
 app.get('/api/admin/applications', authenticateToken, authorizeRole('admin'), async (req, res) => {
   try {
     const result = await db.query(`
- SELECT 
-  a.id, 
-  u.id AS user_id,
-  u.name AS student_name, 
-  u.email, 
-  i.company_name, 
-  i.position, 
-  a.applied_at,
-  a.status,
-  a.transaction_no,
-  a.payment_status
-FROM applications a
-JOIN users u ON u.id = a.user_id
-JOIN internships i ON i.id = a.internship_id
-ORDER BY a.applied_at DESC
-
-`);
+      SELECT 
+        a.id, 
+        u.id AS user_id,
+        u.name AS student_name, 
+        u.email,
+        a.referral_code,
+        i.company_name, 
+        i.position, 
+        a.applied_at,
+        a.status,
+        a.transaction_no,
+        a.payment_status
+      FROM applications a
+      JOIN users u ON u.id = a.user_id
+      JOIN internships i ON i.id = a.internship_id
+      ORDER BY a.applied_at DESC
+    `);
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 
 
