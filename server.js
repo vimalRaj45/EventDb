@@ -2577,6 +2577,304 @@ app.post('/api/certificates/generate', async (req, res) => {
 
 
 
+//new 10 july 
+// 🔹 Assign to mentor
+app.post('/api/targets/assign-to-mentor', async (req, res) => {
+  const { mentor_id, event_id, target, assigned_by } = req.body;
+
+  if (!mentor_id || !event_id || !target || !assigned_by) {
+    return res.status(400).json({ error: 'Missing fields' });
+  }
+
+  try {
+    // Check for existing assignment
+    const check = await db.query(
+      `SELECT * FROM event_targets 
+       WHERE user_id = $1 AND event_id = $2 AND role = 'mentor'`,
+      [mentor_id, event_id]
+    );
+
+    if (check.rows.length > 0) {
+      return res.status(409).json({ error: 'Target already assigned to this mentor for this event.' });
+    }
+
+    // Insert new assignment
+    const result = await db.query(`
+      INSERT INTO event_targets (user_id, assigned_by, event_id, role, target)
+      VALUES ($1, $2, $3, 'mentor', $4)
+      RETURNING *`,
+      [mentor_id, assigned_by, event_id, target]
+    );
+
+    res.json({ success: true, message: 'Target assigned to mentor', data: result.rows[0] });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+
+// 🔹 Admin assigns to student
+app.post('/api/targets/assign-to-student-by-admin', async (req, res) => {
+  const { student_id, event_id, target, assigned_by } = req.body;
+
+  if (!student_id || !event_id || !target || !assigned_by) {
+    return res.status(400).json({ error: 'Missing fields' });
+  }
+
+  try {
+    // Check if target already assigned
+    const check = await db.query(`
+      SELECT * FROM event_targets 
+      WHERE user_id = $1 AND event_id = $2 AND role = 'student'`,
+      [student_id, event_id]
+    );
+
+    if (check.rows.length > 0) {
+      return res.status(409).json({ error: 'Target already assigned to this student for this event.' });
+    }
+
+    // Insert new target
+    const result = await db.query(`
+      INSERT INTO event_targets (user_id, assigned_by, event_id, role, target)
+      VALUES ($1, $2, $3, 'student', $4) RETURNING *`,
+      [student_id, assigned_by, event_id, target]
+    );
+
+    res.json({ success: true, message: 'Target assigned to student by admin', data: result.rows[0] });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+
+
+
+// 🔹 View all targets (Admin)
+app.get('/api/targets/admin/view-all', async (req, res) => {
+  const result = await db.query(`
+    SELECT t.*, s.first_name, s.last_name, s.role AS user_role, e.title AS event_title
+    FROM event_targets t
+    JOIN students s ON s.id = t.user_id
+    JOIN events e ON e.id = t.event_id
+    ORDER BY t.assigned_at DESC
+  `);
+
+  res.json({ success: true, data: result.rows });
+});
+
+
+
+app.get('/api/targets/admin/view-allAdvanced', async (req, res) => {
+  try {
+    const result = await db.query(`
+      SELECT 
+        t.id AS target_id,
+        t.user_id,
+        s.first_name,
+        s.last_name,
+        s.role AS user_role,
+        e.title AS event_title,
+        t.target,
+        t.attained,
+        t.assigned_at,
+
+        -- Downline count and totals
+        (
+          SELECT COUNT(*) 
+          FROM students sub 
+          WHERE sub.referrer_code = s.referral_code
+        ) AS downline_count,
+
+        (
+          SELECT COALESCE(SUM(et.target), 0)
+          FROM event_targets et
+          JOIN students sub ON sub.id = et.user_id
+          WHERE sub.referrer_code = s.referral_code
+        ) AS downline_total_target,
+
+        (
+          SELECT COALESCE(SUM(et.attained), 0)
+          FROM event_targets et
+          JOIN students sub ON sub.id = et.user_id
+          WHERE sub.referrer_code = s.referral_code
+        ) AS downline_total_attained
+
+      FROM event_targets t
+      JOIN students s ON s.id = t.user_id
+      JOIN events e ON e.id = t.event_id
+      ORDER BY t.assigned_at DESC
+    `);
+
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
+// 🔹 Mentor views assigned and received targets (pass mentor_id as query param)
+app.get('/api/targets/admin/downlines-with-progress/:mentor_id', async (req, res) => {
+  const mentorId = req.params.mentor_id;
+
+  try {
+    // 1. Get mentor's referral code
+    const mentorResult = await db.query(`SELECT referral_code FROM students WHERE id = $1`, [mentorId]);
+    if (mentorResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Mentor not found' });
+    }
+
+    const referralCode = mentorResult.rows[0].referral_code;
+
+    // 2. Get downlines with their event targets
+    const downlineResult = await db.query(`
+      SELECT 
+        s.id AS student_id,
+        s.first_name,
+        s.last_name,
+        s.email,
+        e.id AS event_id,
+        e.title AS event_title,
+        et.target,
+        et.attained
+      FROM students s
+      JOIN event_targets et ON et.user_id = s.id
+      JOIN events e ON e.id = et.event_id
+      WHERE s.referrer_code = $1
+      ORDER BY s.id, e.id
+    `, [referralCode]);
+
+    res.json({ success: true, data: downlineResult.rows });
+  } catch (err) {
+    console.error('Error fetching downlines with progress:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+// 🔹 Student views own targets (pass student_id as query param)
+app.get('/api/targets/student/view-mine', async (req, res) => {
+  const studentId = req.query.student_id;
+  if (!studentId) return res.status(400).json({ error: 'Missing student_id' });
+
+  const result = await db.query(`
+    SELECT t.*, e.title AS event_title
+    FROM event_targets t
+    JOIN events e ON e.id = t.event_id
+    WHERE t.user_id = $1
+    ORDER BY t.assigned_at DESC
+  `, [studentId]);
+
+  res.json({ success: true, data: result.rows });
+});
+
+// 🔹 Increment referral progress
+app.post('/api/targets/increment-by-referral', async (req, res) => {
+  const { used_referral_code, event_id } = req.body;
+
+  if (!used_referral_code || !event_id) {
+    return res.status(400).json({ error: 'Referral code and event_id are required' });
+  }
+
+  try {
+    // Step 1: Find student ID using referral code
+    const refStudentRes = await db.query(
+      `SELECT id FROM students WHERE referral_code = $1`,
+      [used_referral_code]
+    );
+
+    if (refStudentRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Referral code not found' });
+    }
+
+    const studentId = refStudentRes.rows[0].id;
+
+    // Step 2: Get latest target for that student in that event
+    const targetRes = await db.query(
+      `SELECT id FROM event_targets
+       WHERE user_id = $1 AND event_id = $2
+       ORDER BY assigned_at DESC
+       LIMIT 1`,
+      [studentId, event_id]
+    );
+
+    if (targetRes.rows.length === 0) {
+      return res.status(404).json({ error: 'No target found for this referral and event' });
+    }
+
+    const targetId = targetRes.rows[0].id;
+
+    // Step 3: Increment attained count
+    const updated = await db.query(
+      `UPDATE event_targets
+       SET attained = attained + 1
+       WHERE id = $1
+       RETURNING *`,
+      [targetId]
+    );
+
+    res.json({
+      success: true,
+      message: 'Progress incremented for referral target',
+      data: updated.rows[0]
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+app.put('/api/targets/:id', async (req, res) => {
+  const { target } = req.body;
+
+  if (!target) {
+    return res.status(400).json({ error: 'Target value is required' });
+  }
+
+  try {
+    const result = await db.query(
+      `
+      UPDATE event_targets
+      SET target = $1
+      WHERE id = $2
+      RETURNING *
+      `,
+      [target, req.params.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Target not found' });
+    }
+
+    res.json({ success: true, message: 'Target updated (attained unchanged)', data: result.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
+app.delete('/api/targets/:id', async (req, res) => {
+  try {
+    await db.query(`DELETE FROM event_targets WHERE id = $1`, [req.params.id]);
+    res.json({ success: true, message: 'Target deleted' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
+
+
+
 // for uptime Express example
 app.get('/ping', (req, res) => res.send('Pong!'));
 
