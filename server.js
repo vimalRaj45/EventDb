@@ -2774,6 +2774,44 @@ app.get('/api/targets/student/view-mine', async (req, res) => {
   res.json({ success: true, data: result.rows });
 });
 
+// 🔹 Get mentor details for a student
+app.get('/api/students/:studentId/mentor', async (req, res) => {
+  const studentId = req.params.studentId;
+
+  try {
+    // Get student's referrer_code
+    const studentRes = await db.query(
+      `SELECT referrer_code FROM students WHERE id = $1`,
+      [studentId]
+    );
+
+    if (studentRes.rows.length === 0 || !studentRes.rows[0].referrer_code) {
+      return res.status(404).json({ error: 'Mentor not assigned yet' });
+    }
+
+    const referrerCode = studentRes.rows[0].referrer_code;
+
+    // Get mentor details
+    const mentorRes = await db.query(
+      `SELECT id, first_name, last_name, email, whatsapp_number, contact_number, referral_code
+       FROM students
+       WHERE referral_code = $1 AND is_mentor = true`,
+      [referrerCode]
+    );
+
+    if (mentorRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Mentor not found' });
+    }
+
+    res.json({ success: true, data: mentorRes.rows[0] });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+
 // 🔹 Increment referral progress
 app.post('/api/targets/increment-by-referral', async (req, res) => {
   const { used_referral_code, event_id } = req.body;
@@ -2870,6 +2908,9 @@ app.delete('/api/targets/:id', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+
+
 
 
 
