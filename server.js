@@ -2718,7 +2718,7 @@ app.get('/api/targets/admin/view-allAdvanced', async (req, res) => {
 
 
 
-// 🔹 Mentor views assigned and received targets (pass mentor_id as query param)
+// 🔹 Mentor views assigned and received targets
 app.get('/api/targets/admin/downlines-with-progress/:mentor_id', async (req, res) => {
   const mentorId = req.params.mentor_id;
 
@@ -2731,7 +2731,7 @@ app.get('/api/targets/admin/downlines-with-progress/:mentor_id', async (req, res
 
     const referralCode = mentorResult.rows[0].referral_code;
 
-    // 2. Get downlines with their event targets
+    // 2. Get downlines with their event targets (now includes event_targets.id as target_id)
     const downlineResult = await db.query(`
       SELECT 
         s.id AS student_id,
@@ -2740,6 +2740,7 @@ app.get('/api/targets/admin/downlines-with-progress/:mentor_id', async (req, res
         s.email,
         e.id AS event_id,
         e.title AS event_title,
+        et.id AS target_id,
         et.target,
         et.attained
       FROM students s
