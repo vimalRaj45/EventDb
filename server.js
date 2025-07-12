@@ -1435,7 +1435,6 @@ app.get('/api/internships/:id', async (req, res) => {
   }
 });
 
-// 🔁 UPDATE Internship (Full Admin Edit)
 app.put('/api/internships/:id', authenticateToken, authorizeRole('admin'), async (req, res) => {
   try {
     const { id } = req.params;
@@ -1447,7 +1446,8 @@ app.put('/api/internships/:id', authenticateToken, authorizeRole('admin'), async
       end_date,
       imgurl,
       status,
-      description
+      description,
+      application_fee
     } = req.body;
 
     const result = await db.query(
@@ -1459,9 +1459,21 @@ app.put('/api/internships/:id', authenticateToken, authorizeRole('admin'), async
         end_date = $5,
         imgurl = $6,
         status = $7,
-        description = $8
-      WHERE id = $9 RETURNING *`,
-      [company_name, position, duration, start_date, end_date, imgurl, status, description, id]
+        description = $8,
+        application_fee = $9
+      WHERE id = $10 RETURNING *`,
+      [
+        company_name,
+        position,
+        duration,
+        start_date,
+        end_date,
+        imgurl,
+        status,
+        description,
+        application_fee,
+        id
+      ]
     );
 
     res.json(result.rows[0]);
@@ -1470,6 +1482,7 @@ app.put('/api/internships/:id', authenticateToken, authorizeRole('admin'), async
     res.status(500).json({ error: err.message });
   }
 });
+
 
 
 
