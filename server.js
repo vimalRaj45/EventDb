@@ -3127,6 +3127,30 @@ app.get('/api/chatbot/general', async (req, res) => {
   }
 });
 
+// 📄 Get Direct Downline IDs and Names for a given referral_code
+app.get('/studentsormentor/downlines/:code', async (req, res) => {
+  try {
+    const query = `
+      SELECT id, first_name, last_name
+      FROM students
+      WHERE referrer_code = $1
+      ORDER BY id
+    `;
+    const result = await db.query(query, [req.params.code]);
+    
+    // Format name as a single field
+    const downlines = result.rows.map(row => ({
+      id: row.id,
+      name: `${row.first_name} ${row.last_name}`
+    }));
+
+    res.json(downlines);
+  } catch (err) {
+    console.error('Error fetching downlines:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 
 
