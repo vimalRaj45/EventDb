@@ -2811,6 +2811,107 @@ app.get('/api/students/:studentId/mentor', async (req, res) => {
   }
 });
 
+app.get('/api/referral/treeupdated/:referral_code', async (req, res) => {
+  const { referral_code } = req.params;
+
+  try {
+
+    // 1. Fetch self
+    const selfRes = await db.query(
+      `SELECT id, first_name, last_name, referral_code, referrer_code, role, target, attained,
+              email, contact_number, whatsapp_number
+       FROM students WHERE referral_code = $1`,
+      [referral_code]
+    );
+
+    if (selfRes.rowCount === 0) {
+      return res.status(404).json({ error: 'Referral code not found' });
+    }
+
+    const self = selfRes.rows[0];
+
+    // 2. Fetch upline
+    let upline = null;
+    if (self.referrer_code) {
+      const upRes = await db.query(
+        `SELECT first_name, last_name, referral_code, role, target, attained,
+                email, contact_number, whatsapp_number
+         FROM students WHERE referral_code = $1`,
+        [self.referrer_code]
+      );
+      if (upRes.rowCount > 0) {
+        const u = upRes.rows[0];
+        upline = {
+          full_name: `${u.first_name} ${u.last_name}`,
+          referral_code: u.referral_code,
+          role: u.role,
+          target: u.target,
+          attained: u.attained,
+          email: u.email,
+          contact_number: u.contact_number,
+          whatsapp_number: u.whatsapp_number
+        };
+      }
+    }
+
+    // 3. Fetch downlines
+    const downRes = await db.query(
+      `SELECT first_name, last_name, referral_code, role, target, attained,
+              email, contact_number, whatsapp_number
+       FROM students WHERE referrer_code = $1`,
+      [referral_code]
+    );
+
+    const downlines = downRes.rows.map(d => ({
+      full_name: `${d.first_name} ${d.last_name}`,
+      referral_code: d.referral_code,
+      role: d.role,
+      target: d.target,
+      attained: d.attained,
+      email: d.email,
+      contact_number: d.contact_number,
+      whatsapp_number: d.whatsapp_number
+    }));
+
+    // 4. Fetch event targets (optional progress tracking)
+    const eventsRes = await db.query(
+      `SELECT event_id, target, attained, role, assigned_at
+       FROM event_targets WHERE user_id = $1`,
+      [self.id]
+    );
+
+    const events = eventsRes.rows.map(e => ({
+      event_id: e.event_id,
+      target: e.target,
+      attained: e.attained,
+      role: e.role,
+      assigned_at: e.assigned_at
+    }));
+
+    // 5. Return response
+    res.json({
+      referral_code,
+      upline,
+      self: {
+        full_name: `${self.first_name} ${self.last_name}`,
+        referral_code: self.referral_code,
+        role: self.role,
+        target: self.target,
+        attained: self.attained,
+        email: self.email,
+        contact_number: self.contact_number,
+        whatsapp_number: self.whatsapp_number,
+        events
+      },
+      downlines
+    });
+
+  } catch (err) {
+    console.error('Error fetching referral tree with contact:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 
 // 🔹 Increment referral progress
 app.post('/api/targets/increment-by-referral', async (req, res) => {
