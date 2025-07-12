@@ -1365,17 +1365,36 @@ app.post('/api/auth/reset-password/:token', async (req, res) => {
   }
 });
 
-// 📥 CREATE Internship (only logged-in user can create)
 app.post('/api/internships', authenticateToken, authorizeRole('admin'), async (req, res) => {
   const userId = req.user.id;
-  const { company_name, position, duration, start_date, end_date, imgurl, description } = req.body;
+  const {
+    company_name,
+    position,
+    duration,
+    start_date,
+    end_date,
+    imgurl,
+    description,
+    application_fee
+  } = req.body;
 
   try {
     const result = await db.query(
       `INSERT INTO internships 
-        (user_id, company_name, position, duration, start_date, end_date, imgurl, description)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-      [userId, company_name, position, duration, start_date, end_date, imgurl, description]
+        (user_id, company_name, position, duration, start_date, end_date, imgurl, description, application_fee)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING *`,
+      [
+        userId,
+        company_name,
+        position,
+        duration,
+        start_date,
+        end_date,
+        imgurl,
+        description,
+        application_fee
+      ]
     );
     res.json(result.rows[0]);
   } catch (err) {
