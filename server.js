@@ -3011,7 +3011,89 @@ app.delete('/api/targets/:id', async (req, res) => {
 });
 
 
+//gemini
+app.post('/api/chatbot/internships', async (req, res) => {
+  const { user_id } = req.body;
 
+  if (!user_id) {
+    return res.status(400).json({ error: 'user_id is required' });
+  }
+
+  try {
+    const result = await db.query(
+      `SELECT company_name, position, status, start_date, end_date
+       FROM internships
+       WHERE user_id = $1
+       ORDER BY submitted_at DESC
+       LIMIT 5`,
+      [user_id]
+    );
+
+    const internships = result.rows;
+
+    return res.json({
+      status: "success",
+      message: internships.length
+        ? `💼 You have ${internships.length} internship(s).`
+        : "No internships found for this user.",
+      data: internships
+    });
+  } catch (err) {
+    console.error("Internship fetch error:", err);
+    return res.status(500).json({
+      status: "error",
+      message: "Server error while fetching internships."
+    });
+  }
+});
+
+app.get('/api/chatbot/general', async (req, res) => {
+  try {
+    const general = {};
+
+    // 📢 Active Announcements
+    const announcements = await db.query(`
+      SELECT title, content, author, start_date
+      FROM announcements
+      WHERE is_active = true
+      ORDER BY priority ASC, start_date DESC
+    
+    `);
+    general.announcements = announcements.rows;
+
+    // 🎉 Upcoming Events
+    const upcomingEvents = await db.query(`
+      SELECT title, start_date, description
+      FROM events
+      WHERE status = 'upcoming'
+      ORDER BY start_date ASC
+      
+    `);
+    general.upcoming_events = upcomingEvents.rows;
+
+    // 💼 Latest Internships
+    const internships = await db.query(`
+      SELECT company_name, position, status
+      FROM internships
+      ORDER BY submitted_at DESC
+      
+    `);
+    general.internships = internships.rows;
+
+    // ✅ Return response
+    return res.json({
+      status: "success",
+      message: "Here is the general information",
+      data: general
+    });
+  } catch (err) {
+    console.error("General info error:", err);
+    return res.status(500).json({
+      status: "error",
+      message: "Something went wrong while fetching general info."
+    });
+  }
+});
 
 
 
