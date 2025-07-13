@@ -3131,17 +3131,18 @@ app.get('/api/chatbot/general', async (req, res) => {
 app.get('/studentsormentor/downlines/:code', async (req, res) => {
   try {
     const query = `
-      SELECT id, first_name, last_name
+      SELECT id, first_name, last_name, role
       FROM students
       WHERE referrer_code = $1
       ORDER BY id
     `;
     const result = await db.query(query, [req.params.code]);
     
-    // Format name as a single field
+    // Format response with role
     const downlines = result.rows.map(row => ({
       id: row.id,
-      name: `${row.first_name} ${row.last_name}`
+      name: `${row.first_name} ${row.last_name}`,
+      role: row.role
     }));
 
     res.json(downlines);
@@ -3150,7 +3151,6 @@ app.get('/studentsormentor/downlines/:code', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
 
 
 
@@ -3171,4 +3171,4 @@ const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-});
+});s
