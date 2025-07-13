@@ -3154,8 +3154,6 @@ app.get('/studentsormentor/downlines/:code', async (req, res) => {
 
 
 
-
-
 // for uptime Express example
 app.get('/ping', (req, res) => res.send('Pong!'));
 
