@@ -1555,11 +1555,16 @@ app.get('/api/users/:id', authenticateToken, authorizeRole('admin'), async (req,
 
 // 🔄 Enhanced Referral Code Generator
 function generateReferralCode() {
-  const prefix = 'ID';
-  const randomStr = Math.random().toString(36).substring(2, 6).toUpperCase();
-  const timestamp = Date.now().toString().slice(-4);
-  return `${prefix}${timestamp}${randomStr}`;
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let code = '';
+
+  for (let i = 0; i < 11; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+
+  return code;
 }
+
 
 async function uploadToImgBB(buffer) {
   const base64 = buffer.toString('base64');
