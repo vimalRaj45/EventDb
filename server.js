@@ -2397,6 +2397,46 @@ app.post('/referrals/increment-intern-chain', async (req, res) => {
 });
 
 
+app.get('/mentor/:referral_code/students/intern-attained', async (req, res) => {
+  try {
+    const { referral_code } = req.params;
+
+    // Get mentor details
+    const mentorResult = await db.query(
+      `SELECT id, first_name, email, role, admin_intern_attained, referral_code FROM students WHERE referral_code = $1 AND role = 'mentor'`,
+      [referral_code]
+    );
+
+    if (mentorResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Mentor with that referral code not found' });
+    }
+
+    const mentor = mentorResult.rows[0];
+
+    // Get students whose referrer_code matches this mentor's referral_code
+    const studentResult = await db.query(
+      `SELECT first_name, email, admin_intern_attained FROM students WHERE referrer_code = $1 AND role = 'student'`,
+      [mentor.referral_code]
+    );
+
+    res.json({
+      mentor: {
+        name: mentor.first_name,
+        email: mentor.email,
+        admin_intern_attained: mentor.admin_intern_attained,
+      },
+      total_students: studentResult.rows.length,
+      students: studentResult.rows,
+    });
+  } catch (err) {
+    console.error('Error fetching mentor student intern attained:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+
+
+
 
 
 // API Routes
