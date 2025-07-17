@@ -2342,7 +2342,7 @@ app.post('/referrals/increment-intern-chain', async (req, res) => {
 
     // 🔍 1. Get the user who owns this referral code
     const userResult = await db.query(
-      `SELECT id, referrer_code FROM students WHERE referral_code = $1`,
+      `SELECT id, referrer_code, first_name, role FROM students WHERE referral_code = $1`,
       [used_referral_code]
     );
 
@@ -2351,24 +2351,44 @@ app.post('/referrals/increment-intern-chain', async (req, res) => {
     }
 
     const userId = userResult.rows[0].id;
+    const userRole = userResult.rows[0].role;
+    const userName = userResult.rows[0].first_name;
     const uplineRefCode = userResult.rows[0].referrer_code;
 
-    // ✅ 2. Increment for this user (referral code owner)
-    await db.query(
-      `UPDATE students SET admin_intern_attained = admin_intern_attained + 1 WHERE id = $1`,
+    // ✅ 2. Increment for this user
+    const updatedUser = await db.query(
+      `UPDATE students 
+       SET admin_intern_attained = admin_intern_attained + 1 
+       WHERE id = $1 
+       RETURNING first_name, admin_intern_attained, role`,
       [userId]
     );
 
-    // ✅ 3. If this user has a referrer, and referrer is mentor, increment them too
+    const updatedUserData = updatedUser.rows[0];
+
+    let uplineMentorData = null;
+
+    // ✅ 3. If referrer is a mentor, increment them too and return
     if (uplineRefCode) {
-      await db.query(
-        `UPDATE students SET admin_intern_attained = admin_intern_attained + 1 
-         WHERE referral_code = $1 AND role = 'mentor'`,
+      const updatedMentor = await db.query(
+        `UPDATE students 
+         SET admin_intern_attained = admin_intern_attained + 1 
+         WHERE referral_code = $1 AND role = 'mentor'
+         RETURNING first_name, admin_intern_attained, role`,
         [uplineRefCode]
       );
+
+      if (updatedMentor.rows.length > 0) {
+        uplineMentorData = updatedMentor.rows[0];
+      }
     }
 
-    res.json({ message: 'admin_intern_attained incremented for referral code owner and upline mentor (if any)' });
+    // ✅ 4. Final response
+    res.json({
+      message: 'admin_intern_attained incremented for referral code owner and upline mentor (if any)',
+      updated_user: updatedUserData,
+      updated_upline_mentor: uplineMentorData || 'No mentor upline found or not a mentor'
+    });
 
   } catch (err) {
     console.error(err);
