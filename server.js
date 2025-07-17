@@ -2340,27 +2340,28 @@ app.post('/referrals/increment-intern-chain', async (req, res) => {
       return res.status(400).json({ error: 'Referral code is required' });
     }
 
-    // 🔍 Get the mentor who owns the referral code
-    const mentor = await db.query(
+    // 🔍 Get the user (could be student or mentor) who owns this referral code
+    const userResult = await db.query(
       `SELECT id, referrer_code, role FROM students WHERE referral_code = $1`,
       [used_referral_code]
     );
 
-    if (mentor.rows.length === 0) {
+    if (userResult.rows.length === 0) {
       return res.status(404).json({ error: 'Referral code not found' });
     }
 
-    const mentorId = mentor.rows[0].id;
-    const uplineRefCode = mentor.rows[0].referrer_code;
+    const userId = userResult.rows[0].id;
+    const uplineRefCode = userResult.rows[0].referrer_code;
+    const userRole = userResult.rows[0].role;
 
-    // ✅ Increment mentor's intern attainment
+    // ✅ 1. Increment for the referral code owner (user who owns the code)
     await db.query(
-      `UPDATE students SET admin_intern_attained = admin_intern_attained + 1 WHERE id = $1 AND role = 'mentor'`,
-      [mentorId]
+      `UPDATE students SET admin_intern_attained = admin_intern_attained + 1 WHERE id = $1`,
+      [userId]
     );
 
-    // ✅ If mentor has an upline mentor, increment their attainment too
-    if (uplineRefCode) {
+    // ✅ 2. If that user is a mentor, increment their upline (if role = mentor)
+    if (userRole === 'mentor' && uplineRefCode) {
       await db.query(
         `UPDATE students SET admin_intern_attained = admin_intern_attained + 1 
          WHERE referral_code = $1 AND role = 'mentor'`,
@@ -2368,12 +2369,13 @@ app.post('/referrals/increment-intern-chain', async (req, res) => {
       );
     }
 
-    res.json({ message: 'Intern attainment incremented for mentor and upline (if any)' });
+    res.json({ message: 'Intern attainment incremented for referral code owner and upline mentor (if any)' });
 
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 
 
