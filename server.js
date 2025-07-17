@@ -3255,6 +3255,212 @@ app.get('/studentsormentor/downlines/:code', async (req, res) => {
 });
 
 
+// Referral Income API
+
+// ✅ Get all referrals
+app.get('/referrals', async (req, res) => {
+  try {
+    const result = await db.query('SELECT * FROM referral_income ORDER BY id DESC');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ✅ Get one referral by ID
+app.get('/referrals/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await db.query('SELECT * FROM referral_income WHERE id = $1', [id]);
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ✅ Create new referral
+app.post('/referrals', async (req, res) => {
+  const {
+    email,
+    stud_name,
+    total_participants,
+    reward_amount_inr,
+    payment_date,
+    transaction_id,
+    downline_name,
+    downline_participants,
+    total_downline_participants,
+    current_participants,
+    total_invitations,
+    inter_total,
+    profile_picture_url,
+    role,
+    msg,
+    ph_no,
+  } = req.body;
+
+  try {
+    const result = await db.query(
+      `INSERT INTO referral_income (
+        email, stud_name, total_participants, reward_amount_inr, payment_date, transaction_id,
+        downline_name, downline_participants, total_downline_participants, current_participants,
+        total_invitations, inter_total, profile_picture_url, role, msg,ph_no
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6,
+        $7, $8, $9, $10,
+        $11, $12, $13, $14, $15,$16
+      ) RETURNING *`,
+      [
+        email,
+        stud_name,
+        total_participants,
+        reward_amount_inr,
+        payment_date,
+        transaction_id,
+        downline_name,
+        downline_participants,
+        total_downline_participants,
+        current_participants,
+        total_invitations,
+        inter_total,
+        profile_picture_url,
+        role,
+        msg,
+        ph_no,
+      ]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ✅ Update referral
+app.put('/referrals/:id', async (req, res) => {
+  const { id } = req.params;
+  const {
+    email,
+    stud_name,
+    total_participants,
+    reward_amount_inr,
+    payment_date,
+    transaction_id,
+    downline_name,
+    downline_participants,
+    total_downline_participants,
+    current_participants,
+    total_invitations,
+    inter_total,
+    profile_picture_url,
+    role,
+    msg,
+    ph_no,
+  } = req.body;
+
+  try {
+    const result = await db.query(
+      `UPDATE referral_income SET
+        email = $1,
+        stud_name = $2,
+        total_participants = $3,
+        reward_amount_inr = $4,
+        payment_date = $5,
+        transaction_id = $6,
+        downline_name = $7,
+        downline_participants = $8,
+        total_downline_participants = $9,
+        current_participants = $10,
+        total_invitations = $11,
+        inter_total = $12,
+        profile_picture_url = $13,
+        role = $14,
+        msg = $15,
+        ph_no = $16,
+      WHERE id = $16 RETURNING *`,
+      [
+        email,
+        stud_name,
+        total_participants,
+        reward_amount_inr,
+        payment_date,
+        transaction_id,
+        downline_name,
+        downline_participants,
+        total_downline_participants,
+        current_participants,
+        total_invitations,
+        inter_total,
+        profile_picture_url,
+        role,
+        msg,
+        id,
+        ph_no,
+      ]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+// ✅ Delete referral
+app.delete('/referrals/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await db.query('DELETE FROM referral_income WHERE id = $1', [id]);
+    res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
+//login for see 
+
+app.get('/referralslogin/:email', async (req, res) => {
+  const { email } = req.params;
+
+  try {
+    const result = await db.query(
+      'SELECT * FROM referral_income WHERE email = $1',
+      [email]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching referral data:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.put('/referralsedit/:email', async (req, res) => {
+  const { email } = req.params;
+  const { stud_name, profile_picture_url } = req.body;
+
+  try {
+    const result = await db.query(
+      `UPDATE referral_income
+       SET stud_name = $1,
+           profile_picture_url = $2
+       WHERE email = $3
+       RETURNING *`,
+      [stud_name, profile_picture_url, email]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'No referral found with this email' });
+    }
+
+    res.json({ message: 'Referral updated successfully', data: result.rows[0] });
+  } catch (err) {
+    console.error('Error updating referral:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+
 
 
 
