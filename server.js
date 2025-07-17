@@ -2368,8 +2368,8 @@ app.post('/referrals/increment-intern-chain', async (req, res) => {
 
     let uplineMentorData = null;
 
-    // ✅ 3. If referrer is a mentor, increment them too and return
-    if (uplineRefCode) {
+    // ✅ 3. Only if the referral code owner is NOT a mentor, increment their upline mentor (if exists)
+    if (userRole !== 'mentor' && uplineRefCode) {
       const updatedMentor = await db.query(
         `UPDATE students 
          SET admin_intern_attained = admin_intern_attained + 1 
@@ -2385,9 +2385,9 @@ app.post('/referrals/increment-intern-chain', async (req, res) => {
 
     // ✅ 4. Final response
     res.json({
-      message: 'admin_intern_attained incremented for referral code owner and upline mentor (if any)',
+      message: 'admin_intern_attained incremented for referral code owner and upline mentor (if applicable)',
       updated_user: updatedUserData,
-      updated_upline_mentor: uplineMentorData || 'No mentor upline found or not a mentor'
+      updated_upline_mentor: uplineMentorData || 'No upline increment (either none or user is mentor)'
     });
 
   } catch (err) {
