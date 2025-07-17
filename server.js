@@ -2397,26 +2397,26 @@ app.post('/referrals/increment-intern-chain', async (req, res) => {
 });
 
 
-app.get('/mentor/:referral_code/students/intern-attained', async (req, res) => {
+app.get('/mentor/:id/students/intern-attained', async (req, res) => {
   try {
-    const { referral_code } = req.params;
+    const { id } = req.params;
 
-    // Get mentor details
+    // Get mentor details by ID
     const mentorResult = await db.query(
-      `SELECT id, first_name, email, role, admin_intern_attained, referral_code FROM students WHERE referral_code = $1 AND role = 'mentor'`,
-      [referral_code]
+      `SELECT id, first_name, email, role, admin_intern_attained FROM students WHERE id = $1 AND role = 'mentor'`,
+      [id]
     );
 
     if (mentorResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Mentor with that referral code not found' });
+      return res.status(404).json({ error: 'Mentor with that ID not found' });
     }
 
     const mentor = mentorResult.rows[0];
 
-    // Get students whose referrer_code matches this mentor's referral_code
+    // Get all students assigned to this mentor
     const studentResult = await db.query(
-      `SELECT first_name, email, admin_intern_attained FROM students WHERE referrer_code = $1 AND role = 'student'`,
-      [mentor.referral_code]
+      `SELECT first_name, email, admin_intern_attained FROM students WHERE assigned_by = $1 AND role = 'student'`,
+      [id]
     );
 
     res.json({
@@ -2430,6 +2430,42 @@ app.get('/mentor/:referral_code/students/intern-attained', async (req, res) => {
     });
   } catch (err) {
     console.error('Error fetching mentor student intern attained:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+
+app.get('/all-mentors/students/intern-attained', async (req, res) => {
+  try {
+    // Step 1: Get all mentors
+    const mentorsResult = await db.query(
+      `SELECT id, first_name, email, admin_intern_attained FROM students WHERE role = 'mentor'`
+    );
+
+    const mentors = mentorsResult.rows;
+
+    // Step 2: For each mentor, get their assigned students
+    const mentorDetails = await Promise.all(
+      mentors.map(async (mentor) => {
+        const studentsResult = await db.query(
+          `SELECT first_name, email, admin_intern_attained FROM students WHERE assigned_by = $1 AND role = 'student'`,
+          [mentor.id]
+        );
+
+        return {
+          mentor_id: mentor.id,
+          mentor_name: mentor.first_name,
+          mentor_email: mentor.email,
+          mentor_admin_intern_attained: mentor.admin_intern_attained,
+          total_students: studentsResult.rows.length,
+          students: studentsResult.rows,
+        };
+      })
+    );
+
+    res.json({ count: mentorDetails.length, data: mentorDetails });
+  } catch (err) {
+    console.error('Error fetching all mentor-student intern attained data:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
