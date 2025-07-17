@@ -3279,6 +3279,7 @@ app.get('/referrals/:id', async (req, res) => {
 });
 
 // ✅ Create new referral
+// ✅ Create new referral
 app.post('/referrals', async (req, res) => {
   const {
     email,
@@ -3297,6 +3298,7 @@ app.post('/referrals', async (req, res) => {
     role,
     msg,
     ph_no,
+    refer_code,
   } = req.body;
 
   try {
@@ -3304,11 +3306,11 @@ app.post('/referrals', async (req, res) => {
       `INSERT INTO referral_income (
         email, stud_name, total_participants, reward_amount_inr, payment_date, transaction_id,
         downline_name, downline_participants, total_downline_participants, current_participants,
-        total_invitations, inter_total, profile_picture_url, role, msg,ph_no
+        total_invitations, inter_total, profile_picture_url, role, msg,ph_no,refer_code
       ) VALUES (
         $1, $2, $3, $4, $5, $6,
         $7, $8, $9, $10,
-        $11, $12, $13, $14, $15,$16
+        $11, $12, $13, $14, $15,$16,$17
       ) RETURNING *`,
       [
         email,
@@ -3327,6 +3329,7 @@ app.post('/referrals', async (req, res) => {
         role,
         msg,
         ph_no,
+        refer_code,
       ]
     );
     res.status(201).json(result.rows[0]);
