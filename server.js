@@ -2340,9 +2340,9 @@ app.post('/referrals/increment-intern-chain', async (req, res) => {
       return res.status(400).json({ error: 'Referral code is required' });
     }
 
-    // 🔍 Get the user (could be student or mentor) who owns this referral code
+    // 🔍 1. Get the user who owns this referral code
     const userResult = await db.query(
-      `SELECT id, referrer_code, role FROM students WHERE referral_code = $1`,
+      `SELECT id, referrer_code FROM students WHERE referral_code = $1`,
       [used_referral_code]
     );
 
@@ -2352,16 +2352,15 @@ app.post('/referrals/increment-intern-chain', async (req, res) => {
 
     const userId = userResult.rows[0].id;
     const uplineRefCode = userResult.rows[0].referrer_code;
-    const userRole = userResult.rows[0].role;
 
-    // ✅ 1. Increment for the referral code owner (user who owns the code)
+    // ✅ 2. Increment for this user (referral code owner)
     await db.query(
       `UPDATE students SET admin_intern_attained = admin_intern_attained + 1 WHERE id = $1`,
       [userId]
     );
 
-    // ✅ 2. If that user is a mentor, increment their upline (if role = mentor)
-    if (userRole === 'mentor' && uplineRefCode) {
+    // ✅ 3. If this user has a referrer, and referrer is mentor, increment them too
+    if (uplineRefCode) {
       await db.query(
         `UPDATE students SET admin_intern_attained = admin_intern_attained + 1 
          WHERE referral_code = $1 AND role = 'mentor'`,
@@ -2369,13 +2368,13 @@ app.post('/referrals/increment-intern-chain', async (req, res) => {
       );
     }
 
-    res.json({ message: 'Intern attainment incremented for referral code owner and upline mentor (if any)' });
+    res.json({ message: 'admin_intern_attained incremented for referral code owner and upline mentor (if any)' });
 
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
-
 
 
 
