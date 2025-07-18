@@ -3378,8 +3378,9 @@ app.put('/referrals/:id', async (req, res) => {
         profile_picture_url = $13,
         role = $14,
         msg = $15,
-        ph_no = $16,
-      WHERE id = $16 RETURNING *`,
+        ph_no = $16
+      WHERE id = $17
+      RETURNING *`,
       [
         email,
         stud_name,
@@ -3396,27 +3397,17 @@ app.put('/referrals/:id', async (req, res) => {
         profile_picture_url,
         role,
         msg,
-        id,
         ph_no,
+        id
       ]
     );
+
     res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-
-// ✅ Delete referral
-app.delete('/referrals/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    await db.query('DELETE FROM referral_income WHERE id = $1', [id]);
-    res.status(204).send();
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
 
 
 
