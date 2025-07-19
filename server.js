@@ -2629,7 +2629,7 @@ app.get('/api/events/:eventId/participants-csv', async (req, res) => {
   }
 });
 
-const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_JSON);
+const serviceAccount = JSON.parse(process.env.GOOGLE_CREDENTIALS);
 // Util: read Google Sheet
 async function readSheet(sheetId, sheetName) {
 // Create auth using parsed credentials
