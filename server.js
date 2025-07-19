@@ -2630,32 +2630,38 @@ app.get('/api/events/:eventId/participants-csv', async (req, res) => {
 });
 
 app.post('/api/certificates/generate', async (req, res) => {
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader('Transfer-Encoding', 'chunked');
+
   const { sheetId, sheetName, templateId, folderId, eventId } = req.body;
 
+  const log = (msg) => {
+    res.write(msg + '\n');
+    console.log(msg);
+  };
+
   if (!sheetId || !sheetName || !templateId || !folderId || !eventId) {
-    return res.status(400).json({ success: false, error: 'Missing required fields.' });
+    log('❌ Missing required fields.');
+    return res.end();
   }
 
-  const scriptBase = `https://script.google.com/macros/s/AKfycbyLIMuNAJpWyUDWEZxEtZHxYLDdHm9Fxsvy9K2wXo3da9ijrPpxSqmYKpsjr1sO4N6l/exec`; // Replace with your actual deployed URL
+  const scriptBase = `https://script.google.com/macros/s/AKfycbyLIMuNAJpWyUDWEZxEtZHxYLDdHm9Fxsvy9K2wXo3da9ijrPpxSqmYKpsjr1sO4N6l/exec`;
   const inserted = [], skipped = [];
 
   try {
-    // Step 1: Fetch all row metadata
     const fetchRows = await fetch(`${scriptBase}?mode=rows&sheetId=${sheetId}&sheetName=${sheetName}`);
     const { success, rows } = await fetchRows.json();
 
     if (!success || !Array.isArray(rows)) {
-      return res.status(500).json({ success: false, error: 'Failed to fetch rows.' });
+      log('❌ Failed to fetch rows.');
+      return res.end();
     }
 
-    // Step 2: Process one row at a time
     for (const row of rows) {
       const { row: rowNum, email } = row;
-
       let participantId = null;
 
       try {
-        // 2a. Try to find participant (optional)
         const participantQuery = await db.query(`
           SELECT p.id FROM participants p
           JOIN users u ON u.id = p.user_id
@@ -2665,58 +2671,58 @@ app.post('/api/certificates/generate', async (req, res) => {
         if (participantQuery.rowCount > 0) {
           participantId = participantQuery.rows[0].id;
 
-          // 2b. Check if already exists (only if participant found)
           const certCheck = await db.query(`
             SELECT 1 FROM certificates WHERE event_id = $1 AND participant_id = $2
           `, [eventId, participantId]);
 
           if (certCheck.rowCount > 0) {
-            console.log(`⚠️ Skipped (already exists) for ${email}`);
-            skipped.push({ email, reason: '⚠️ Already exists for existing participant' });
+            log(`⚠️ Skipped (already exists) for ${email}`);
+            skipped.push({ email, reason: 'Already exists' });
             continue;
           }
+        } else {
+          log(`🚫 Skipped: No participant found for ${email}`);
+          skipped.push({ email, reason: 'No participant found' });
+          continue;
         }
 
-        // 2c. Generate from Apps Script
         const certUrl = `${scriptBase}?sheetId=${sheetId}&sheetName=${sheetName}&templateId=${templateId}&folderId=${folderId}&row=${rowNum}`;
         const certResp = await fetch(certUrl);
         const certData = await certResp.json();
 
         if (!certData.success || !certData.certificates?.length) {
-          console.log(`❌ Generation failed for ${email}`);
-          skipped.push({ email, reason: '❌ Certificate generation failed' });
+          log(`❌ Generation failed for ${email}`);
+          skipped.push({ email, reason: 'Generation failed' });
           continue;
         }
 
         const { url, uniqueCode } = certData.certificates[0];
 
-        // 2d. Insert even if participant is null
         await db.query(`
           INSERT INTO certificates (event_id, participant_id, certificate_url, unique_code, issued_at)
           VALUES ($1, $2, $3, $4, NOW())
         `, [eventId, participantId, url, uniqueCode]);
 
-        console.log(`✅ Inserted for ${email} (${participantId ? 'linked' : 'no participant'})`);
-        inserted.push({ email, url, linked: !!participantId });
+        log(`✅ Inserted: ${email} → ${url}`);
+        inserted.push({ email, url });
 
       } catch (err) {
-        console.error(`❌ Error for ${email}: ${err.message}`);
-        skipped.push({ email, reason: '❌ Unexpected error during generation or insert' });
+        log(`❌ Error for ${email}: ${err.message}`);
+        skipped.push({ email, reason: 'Unexpected error' });
       }
     }
 
-    return res.json({
-      success: true,
-      message: `${inserted.length} inserted, ${skipped.length} skipped.`,
-      inserted,
-      skipped
-    });
+    log(`\n🎉 All Done: ${inserted.length} inserted, ${skipped.length} skipped`);
+    res.end();
 
   } catch (err) {
-    console.error('❌ Fatal server error:', err.message);
-    return res.status(500).json({ success: false, error: err.message });
+    log(`❌ Fatal server error: ${err.message}`);
+    res.end();
   }
 });
+
+
+
 
 
 
