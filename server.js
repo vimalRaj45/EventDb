@@ -2630,34 +2630,45 @@ app.get('/api/events/:eventId/participants-csv', async (req, res) => {
 });
 
 const serviceAccount = JSON.parse(process.env.GOOGLE_CREDENTIALS);
+
 // Util: read Google Sheet
 async function readSheet(sheetId, sheetName) {
-// Create auth using parsed credentials
-const auth = new google.auth.GoogleAuth({
-  credentials: serviceAccount,
-  scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-});
-
-  const client = await auth.getClient();
-  const sheets = google.sheets({ version: 'v4', auth: client });
-
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: sheetId,
-    range: sheetName,
-  });
-
-  const rows = res.data.values;
-  if (!rows || rows.length === 0) return [];
-
-  const headers = rows[0];
-  return rows.slice(1).map((row, i) => {
-    const rowData = {};
-    headers.forEach((header, j) => {
-      rowData[header.trim().toLowerCase()] = row[j] || '';
+  try {
+    // Create auth using parsed credentials
+    const auth = new google.auth.GoogleAuth({
+      credentials: serviceAccount,
+      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
     });
-    rowData._rowIndex = i + 1;
-    return rowData;
-  });
+
+    const client = await auth.getClient();
+    const sheets = google.sheets({ version: 'v4', auth: client });
+
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: sheetId,
+      range: sheetName,
+    });
+
+    console.log('✅ Connected to Google Sheets API');
+
+    const rows = res.data.values;
+    if (!rows || rows.length === 0) {
+      console.log('⚠️ No data found in the sheet');
+      return [];
+    }
+
+    const headers = rows[0];
+    return rows.slice(1).map((row, i) => {
+      const rowData = {};
+      headers.forEach((header, j) => {
+        rowData[header.trim().toLowerCase()] = row[j] || '';
+      });
+      rowData._rowIndex = i + 1;
+      return rowData;
+    });
+  } catch (error) {
+    console.error('❌ Failed to connect to Google Sheets:', error.message);
+    throw error; // rethrow for higher-level handling
+  }
 }
 
 // POST SSE route
