@@ -1,5 +1,5 @@
 
-const { google } = require('googleapis');
+
 require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -2629,141 +2629,94 @@ app.get('/api/events/:eventId/participants-csv', async (req, res) => {
   }
 });
 
-const serviceAccount = JSON.parse(process.env.GOOGLE_CREDENTIALS);
-
-// Util: read Google Sheet
-async function readSheet(sheetId, sheetName) {
-  try {
-    // Create auth using parsed credentials
-    const auth = new google.auth.GoogleAuth({
-      credentials: serviceAccount,
-      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-    });
-
-    const client = await auth.getClient();
-    const sheets = google.sheets({ version: 'v4', auth: client });
-
-    const res = await sheets.spreadsheets.values.get({
-      spreadsheetId: sheetId,
-      range: sheetName,
-    });
-
-    console.log('✅ Connected to Google Sheets API');
-
-    const rows = res.data.values;
-    if (!rows || rows.length === 0) {
-      console.log('⚠️ No data found in the sheet');
-      return [];
-    }
-
-    const headers = rows[0];
-    return rows.slice(1).map((row, i) => {
-      const rowData = {};
-      headers.forEach((header, j) => {
-        rowData[header.trim().toLowerCase()] = row[j] || '';
-      });
-      rowData._rowIndex = i + 1;
-      return rowData;
-    });
-  } catch (error) {
-    console.error('❌ Failed to connect to Google Sheets:', error.message);
-    throw error; // rethrow for higher-level handling
-  }
-}
-
-// POST SSE route
 app.post('/api/certificates/generate', async (req, res) => {
   const { sheetId, sheetName, templateId, folderId, eventId } = req.body;
 
   if (!sheetId || !sheetName || !templateId || !folderId || !eventId) {
-    return res.status(400).json({ success: false, error: 'Missing required fields' });
+    return res.status(400).json({ success: false, error: 'Missing required fields.' });
   }
 
-  // SSE headers
-  res.set({
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    Connection: 'keep-alive',
-  });
-  res.flushHeaders();
-
-  const sendEvent = (data) => {
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
-  };
+  const scriptBase = `https://script.google.com/macros/s/AKfycbyLIMuNAJpWyUDWEZxEtZHxYLDdHm9Fxsvy9K2wXo3da9ijrPpxSqmYKpsjr1sO4N6l/exec`; // Replace with your actual deployed URL
+  const inserted = [], skipped = [];
 
   try {
-    const rows = await readSheet(sheetId, sheetName);
-    const scriptUrl = 'https://script.google.com/macros/s/AKfycbw_X7JrrnoA2JFApciTHeIKRbYckvE0sdns-wFHFAOZYhQjM8LVYmZHU0Wv_1tb1fi5/exec';
+    // Step 1: Fetch all row metadata
+    const fetchRows = await fetch(`${scriptBase}?mode=rows&sheetId=${sheetId}&sheetName=${sheetName}`);
+    const { success, rows } = await fetchRows.json();
 
-    for (const row of rows) {
-      const { email, name, _rowIndex } = row;
-      if (!email || !name) {
-        sendEvent({ row: _rowIndex, status: 'skipped', reason: 'Missing email or name' });
-        continue;
-      }
-
-      // Check participant in DB
-      const participantResult = await db.query(`
-        SELECT p.id FROM participants p
-        JOIN users u ON u.id = p.user_id
-        WHERE u.email = $1 AND p.event_id = $2
-      `, [email, eventId]);
-
-      if (!participantResult.rows.length) {
-        sendEvent({ row: _rowIndex, email, status: 'skipped', reason: 'Participant not found' });
-        continue;
-      }
-
-      const participantId = participantResult.rows[0].id;
-
-      // Check if certificate already exists
-      const certExists = await db.query(`
-        SELECT 1 FROM certificates WHERE event_id = $1 AND participant_id = $2
-      `, [eventId, participantId]);
-
-      if (certExists.rows.length > 0) {
-        sendEvent({ row: _rowIndex, email, status: 'skipped', reason: 'Already exists' });
-        continue;
-      }
-
-      // Call Apps Script
-      const url = `${scriptUrl}?sheetId=${sheetId}&sheetName=${sheetName}&templateId=${templateId}&folderId=${folderId}&row=${_rowIndex}`;
-      let result;
-      try {
-        const response = await fetch(url);
-        result = await response.json();
-      } catch (err) {
-        sendEvent({ row: _rowIndex, email, status: 'skipped', reason: 'Invalid JSON' });
-        continue;
-      }
-
-      if (!result.success || !Array.isArray(result.certificates)) {
-        sendEvent({ row: _rowIndex, email, status: 'skipped', reason: result.error || 'No certificate returned' });
-        continue;
-      }
-
-      const cert = result.certificates[0];
-      const { url: certUrl, uniqueCode } = cert;
-
-      // Insert new certificate
-      const insertResult = await db.query(`
-        INSERT INTO certificates (event_id, participant_id, certificate_url, unique_code, issued_at)
-        VALUES ($1, $2, $3, $4, NOW())
-        RETURNING *
-      `, [eventId, participantId, certUrl, uniqueCode]);
-
-      sendEvent({ row: _rowIndex, email, status: 'inserted', url: certUrl });
+    if (!success || !Array.isArray(rows)) {
+      return res.status(500).json({ success: false, error: 'Failed to fetch rows.' });
     }
 
-    sendEvent({ done: true });
-    res.end();
+    // Step 2: Process one row at a time
+    for (const row of rows) {
+      const { row: rowNum, email } = row;
+
+      let participantId = null;
+
+      try {
+        // 2a. Try to find participant (optional)
+        const participantQuery = await db.query(`
+          SELECT p.id FROM participants p
+          JOIN users u ON u.id = p.user_id
+          WHERE u.email = $1 AND p.event_id = $2
+        `, [email, eventId]);
+
+        if (participantQuery.rowCount > 0) {
+          participantId = participantQuery.rows[0].id;
+
+          // 2b. Check if already exists (only if participant found)
+          const certCheck = await db.query(`
+            SELECT 1 FROM certificates WHERE event_id = $1 AND participant_id = $2
+          `, [eventId, participantId]);
+
+          if (certCheck.rowCount > 0) {
+            console.log(`⚠️ Skipped (already exists) for ${email}`);
+            skipped.push({ email, reason: '⚠️ Already exists for existing participant' });
+            continue;
+          }
+        }
+
+        // 2c. Generate from Apps Script
+        const certUrl = `${scriptBase}?sheetId=${sheetId}&sheetName=${sheetName}&templateId=${templateId}&folderId=${folderId}&row=${rowNum}`;
+        const certResp = await fetch(certUrl);
+        const certData = await certResp.json();
+
+        if (!certData.success || !certData.certificates?.length) {
+          console.log(`❌ Generation failed for ${email}`);
+          skipped.push({ email, reason: '❌ Certificate generation failed' });
+          continue;
+        }
+
+        const { url, uniqueCode } = certData.certificates[0];
+
+        // 2d. Insert even if participant is null
+        await db.query(`
+          INSERT INTO certificates (event_id, participant_id, certificate_url, unique_code, issued_at)
+          VALUES ($1, $2, $3, $4, NOW())
+        `, [eventId, participantId, url, uniqueCode]);
+
+        console.log(`✅ Inserted for ${email} (${participantId ? 'linked' : 'no participant'})`);
+        inserted.push({ email, url, linked: !!participantId });
+
+      } catch (err) {
+        console.error(`❌ Error for ${email}: ${err.message}`);
+        skipped.push({ email, reason: '❌ Unexpected error during generation or insert' });
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: `${inserted.length} inserted, ${skipped.length} skipped.`,
+      inserted,
+      skipped
+    });
+
   } catch (err) {
-    sendEvent({ success: false, error: err.message });
-    res.end();
+    console.error('❌ Fatal server error:', err.message);
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
-
-
 
 
 
