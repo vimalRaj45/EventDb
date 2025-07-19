@@ -2629,124 +2629,81 @@ app.get('/api/events/:eventId/participants-csv', async (req, res) => {
   }
 });
 
-// Util: read Google Sheet
-async function readSheet(sheetId, sheetName) {
-  const auth = new google.auth.GoogleAuth({
-    keyFile:'auth.json'),
-    scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-  });
-
-  const client = await auth.getClient();
-  const sheets = google.sheets({ version: 'v4', auth: client });
-
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: sheetId,
-    range: sheetName,
-  });
-
-  const rows = res.data.values;
-  if (!rows || rows.length === 0) return [];
-
-  const headers = rows[0];
-  return rows.slice(1).map((row, i) => {
-    const rowData = {};
-    headers.forEach((header, j) => {
-      rowData[header.trim().toLowerCase()] = row[j] || '';
-    });
-    rowData._rowIndex = i + 1;
-    return rowData;
-  });
-}
-
-// POST SSE route
 app.post('/api/certificates/generate', async (req, res) => {
   const { sheetId, sheetName, templateId, folderId, eventId } = req.body;
 
   if (!sheetId || !sheetName || !templateId || !folderId || !eventId) {
-    return res.status(400).json({ success: false, error: 'Missing required fields' });
+    return res.status(400).json({ success: false, error: 'Missing required fields in request body.' });
   }
 
-  // SSE headers
-  res.set({
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    Connection: 'keep-alive',
-  });
-  res.flushHeaders();
-
-  const sendEvent = (data) => {
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
-  };
+  const skipped = [];
+  const inserted = [];
 
   try {
-    const rows = await readSheet(sheetId, sheetName);
-    const scriptUrl = 'https://script.google.com/macros/s/AKfycbw_X7JrrnoA2JFApciTHeIKRbYckvE0sdns-wFHFAOZYhQjM8LVYmZHU0Wv_1tb1fi5/exec';
+    const scriptUrl = `https://script.google.com/macros/s/AKfycby1BU8ksPS2BEbhe9wRukwuNXL7cJx6dILvVciWaBtVKUYYuyX0jSxTgZmt2NnOhuhG/exec`;
+    const fullUrl = `${scriptUrl}?sheetId=${sheetId.trim()}&sheetName=${sheetName.trim()}&templateId=${templateId.trim()}&folderId=${folderId.trim()}`;
 
-    for (const row of rows) {
-      const { email, name, _rowIndex } = row;
-      if (!email || !name) {
-        sendEvent({ row: _rowIndex, status: 'skipped', reason: 'Missing email or name' });
-        continue;
-      }
+    const response = await fetch(fullUrl);
 
-      // Check participant in DB
-      const participantResult = await db.query(`
+    let result;
+    try {
+      result = await response.json();
+    } catch (err) {
+      const html = await response.text();
+      console.error('❌ Apps Script returned non-JSON:', html);
+      return res.status(500).json({ success: false, error: 'Apps Script did not return valid JSON.' });
+    }
+
+    if (!result || !Array.isArray(result.certificates)) {
+      return res.status(500).json({
+        success: false,
+        error: 'Certificates data missing or not in expected format.'
+      });
+    }
+
+    const certificates = result.certificates;
+
+    for (const cert of certificates) {
+      const { email, url, uniqueCode } = cert;
+
+      const queryResult = await db.query(`
         SELECT p.id FROM participants p
         JOIN users u ON u.id = p.user_id
         WHERE u.email = $1 AND p.event_id = $2
       `, [email, eventId]);
 
-      if (!participantResult.rows.length) {
-        sendEvent({ row: _rowIndex, email, status: 'skipped', reason: 'Participant not found' });
+      if (!queryResult.rows.length) {
+        console.warn(`⚠ Skipped: No participant found for ${email}`);
+        skipped.push({ email, reason: 'Participant not found in database' });
         continue;
       }
 
-      const participantId = participantResult.rows[0].id;
+      const participantId = queryResult.rows[0].id;
 
-      // Check if certificate already exists
-      const certExists = await db.query(`
-        SELECT 1 FROM certificates WHERE event_id = $1 AND participant_id = $2
-      `, [eventId, participantId]);
-
-      if (certExists.rows.length > 0) {
-        sendEvent({ row: _rowIndex, email, status: 'skipped', reason: 'Already exists' });
-        continue;
-      }
-
-      // Call Apps Script
-      const url = `${scriptUrl}?sheetId=${sheetId}&sheetName=${sheetName}&templateId=${templateId}&folderId=${folderId}&row=${_rowIndex}`;
-      let result;
-      try {
-        const response = await fetch(url);
-        result = await response.json();
-      } catch (err) {
-        sendEvent({ row: _rowIndex, email, status: 'skipped', reason: 'Invalid JSON' });
-        continue;
-      }
-
-      if (!result.success || !Array.isArray(result.certificates)) {
-        sendEvent({ row: _rowIndex, email, status: 'skipped', reason: result.error || 'No certificate returned' });
-        continue;
-      }
-
-      const cert = result.certificates[0];
-      const { url: certUrl, uniqueCode } = cert;
-
-      // Insert new certificate
       const insertResult = await db.query(`
         INSERT INTO certificates (event_id, participant_id, certificate_url, unique_code, issued_at)
         VALUES ($1, $2, $3, $4, NOW())
+        ON CONFLICT (event_id, participant_id) DO NOTHING
         RETURNING *
-      `, [eventId, participantId, certUrl, uniqueCode]);
+      `, [eventId, participantId, url, uniqueCode]);
 
-      sendEvent({ row: _rowIndex, email, status: 'inserted', url: certUrl });
+      if (insertResult.rows.length > 0) {
+        inserted.push({ email, url });
+      } else {
+        skipped.push({ email, reason: 'Certificate already exists' });
+      }
     }
 
-    sendEvent({ done: true });
-    res.end();
-  } catch (err) {
-    sendEvent({ success: false, error: err.message });
-    res.end();
+    return res.json({
+      success: true,
+      message: `${inserted.length} inserted, ${skipped.length} skipped.`,
+      inserted,
+      skipped
+    });
+
+  } catch (error) {
+    console.error('❌ Server error:', error);
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 
