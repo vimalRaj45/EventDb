@@ -3424,7 +3424,7 @@ app.put('/referrals/:id', async (req, res) => {
         msg = $15,
         ph_no = $16,
         refer_code = $17
-      WHERE id = $17
+      WHERE id = $18
       RETURNING *`,
       [
         email,
@@ -3444,7 +3444,7 @@ app.put('/referrals/:id', async (req, res) => {
         msg,
         ph_no,
         refer_code,
-        id
+        id // ✅ This is now $18
       ]
     );
 
