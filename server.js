@@ -3401,6 +3401,7 @@ app.put('/referrals/:id', async (req, res) => {
     role,
     msg,
     ph_no,
+    refer_code,
   } = req.body;
 
   try {
@@ -3421,7 +3422,8 @@ app.put('/referrals/:id', async (req, res) => {
         profile_picture_url = $13,
         role = $14,
         msg = $15,
-        ph_no = $16
+        ph_no = $16,
+        refer_code = $17
       WHERE id = $17
       RETURNING *`,
       [
@@ -3441,6 +3443,7 @@ app.put('/referrals/:id', async (req, res) => {
         role,
         msg,
         ph_no,
+        refer_code,
         id
       ]
     );
@@ -3451,6 +3454,23 @@ app.put('/referrals/:id', async (req, res) => {
   }
 });
 
+
+// ✅ Delete referral
+
+app.delete('/referrals/:id', async (req, res) => {
+  const { id } = req.params;        
+    try {
+        const result = await db.query('DELETE FROM referral_income WHERE id = $1 RETURNING *', [id]);
+        
+        if (result.rowCount === 0) {
+        return res.status(404).json({ error: 'Referral not found' });
+        }
+    
+        res.json({ message: 'Referral deleted successfully', data: result.rows[0] });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }   
+});
 
 
 
