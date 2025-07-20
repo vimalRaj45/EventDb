@@ -2629,6 +2629,35 @@ app.get('/api/events/:eventId/participants-csv', async (req, res) => {
   }
 });
 
+// 🔽 1. Download participants as CSV
+app.get('/api/events/:eventId/participants-csv', async (req, res) => {
+  const { eventId } = req.params;
+
+  try {
+    const query = `
+      SELECT u.id AS participant_id, u.name, u.email, p.event_id
+      FROM participants p
+      JOIN users u ON u.id = p.user_id
+      WHERE p.event_id = $1
+    `;
+    const { rows } = await db.query(query, [eventId]);
+
+    if (!rows.length) return res.status(404).send('No participants found');
+
+    let csv = 'participant_id,name,email,event_id\n';
+    rows.forEach(r => {
+      csv += `${r.participant_id},"${r.name}","${r.email}",${r.event_id}\n`;
+    });
+
+    res.header('Content-Type', 'text/csv');
+    res.attachment(`participants_event_${eventId}.csv`);
+    res.send(csv);
+  } catch (err) {
+    console.error('CSV error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 app.post('/api/certificates/generate', async (req, res) => {
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
   res.setHeader('Transfer-Encoding', 'chunked');
@@ -2720,9 +2749,6 @@ app.post('/api/certificates/generate', async (req, res) => {
     res.end();
   }
 });
-
-
-
 
 
 
