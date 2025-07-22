@@ -2921,14 +2921,18 @@ app.get('/api/targets/admin/downlines-with-progress/:mentor_id', async (req, res
 
   try {
     // 1. Get mentor's referral code
-    const mentorResult = await db.query(`SELECT referral_code FROM students WHERE id = $1`, [mentorId]);
+    const mentorResult = await db.query(
+      `SELECT referral_code FROM students WHERE id = $1`,
+      [mentorId]
+    );
+
     if (mentorResult.rows.length === 0) {
       return res.status(404).json({ error: 'Mentor not found' });
     }
 
     const referralCode = mentorResult.rows[0].referral_code;
 
-    // 2. Get downlines with their event targets (now includes event_targets.id as target_id)
+    // 2. Get downlines with their event targets (only where student role matches)
     const downlineResult = await db.query(`
       SELECT 
         s.id AS student_id,
@@ -2944,6 +2948,7 @@ app.get('/api/targets/admin/downlines-with-progress/:mentor_id', async (req, res
       JOIN event_targets et ON et.user_id = s.id
       JOIN events e ON e.id = et.event_id
       WHERE s.referrer_code = $1
+        AND s.role = 'student'
       ORDER BY s.id, e.id
     `, [referralCode]);
 
