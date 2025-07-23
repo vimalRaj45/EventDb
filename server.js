@@ -1776,10 +1776,36 @@ app.post('/admin/create-mentor', async (req, res) => {
 });
 
 
-// 📥 Enhanced Referral Tree with Performance Metrics (Optimized)
 app.get('/students/referral-tree/:code', async (req, res) => {
   try {
-    const query = `
+    const code = req.params.code;
+
+    // First: Check if there are any downlines
+    const checkQuery = `
+      WITH RECURSIVE referral_tree AS (
+        SELECT referral_code
+        FROM students
+        WHERE referral_code = $1
+
+        UNION ALL
+
+        SELECT s.referral_code
+        FROM students s
+        JOIN referral_tree rt ON s.referrer_code = rt.referral_code
+      )
+      SELECT COUNT(*) > 1 AS has_downline
+      FROM referral_tree;
+    `;
+
+    const checkResult = await db.query(checkQuery, [code]);
+    const hasDownline = checkResult.rows[0].has_downline;
+
+    if (!hasDownline) {
+      return res.json({ message: "No downlines found." });
+    }
+
+    // If downlines exist: Fetch full referral tree with metrics
+    const treeQuery = `
       WITH RECURSIVE referral_tree AS (
         SELECT 
           id, first_name, last_name, email, referral_code, 
@@ -1787,9 +1813,9 @@ app.get('/students/referral-tree/:code', async (req, res) => {
           0 AS level
         FROM students 
         WHERE referral_code = $1
-        
+
         UNION ALL
-        
+
         SELECT 
           s.id, s.first_name, s.last_name, s.email, 
           s.referral_code, s.referrer_code, s.role, 
@@ -1813,8 +1839,9 @@ app.get('/students/referral-tree/:code', async (req, res) => {
       ORDER BY rt.level ASC, rt.id ASC;
     `;
 
-    const result = await db.query(query, [req.params.code]);
-    res.json(result.rows);
+    const treeResult = await db.query(treeQuery, [code]);
+    res.json(treeResult.rows);
+
   } catch (err) {
     console.error('Error in /students/referral-tree/:code:', err);
     res.status(500).json({ error: 'Internal server error' });
