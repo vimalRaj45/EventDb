@@ -1776,7 +1776,7 @@ app.post('/admin/create-mentor', async (req, res) => {
 });
 
 
-// 📥 Enhanced Referral Tree with Performance Metrics
+// 📥 Enhanced Referral Tree with Performance Metrics (Optimized)
 app.get('/students/referral-tree/:code', async (req, res) => {
   try {
     const query = `
@@ -1799,20 +1799,28 @@ app.get('/students/referral-tree/:code', async (req, res) => {
         JOIN referral_tree rt ON s.referrer_code = rt.referral_code
       )
       SELECT 
-        id, first_name, last_name, email, 
-        referral_code, referrer_code, role, 
-        target, attained, status, level,
-        (attained >= target) AS target_achieved,
-        (SELECT COUNT(*) FROM students WHERE referrer_code = rt.referral_code) AS referral_count
+        rt.id, rt.first_name, rt.last_name, rt.email, 
+        rt.referral_code, rt.referrer_code, rt.role, 
+        rt.target, rt.attained, rt.status, rt.level,
+        (rt.attained >= rt.target) AS target_achieved,
+        COALESCE(sub.referral_count, 0) AS referral_count
       FROM referral_tree rt
-      ORDER BY level, id
+      LEFT JOIN (
+        SELECT referrer_code, COUNT(*) AS referral_count
+        FROM students
+        GROUP BY referrer_code
+      ) sub ON rt.referral_code = sub.referrer_code
+      ORDER BY rt.level ASC, rt.id ASC;
     `;
+
     const result = await db.query(query, [req.params.code]);
     res.json(result.rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('Error in /students/referral-tree/:code:', err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
+
 
 // 🧍 Promote to Mentor
 app.put('/students/promote/:id',  async (req, res) => {
