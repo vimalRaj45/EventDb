@@ -802,69 +802,59 @@ app.get('/api/profile/events', authenticateToken, async (req, res) => {
 });
 
 /* --------------------- PASSWORD RESET --------------------- */
+// Generate and send reset token
 app.post('/api/auth/forgot-password', async (req, res) => {
   const { email } = req.body;
+
   console.log('🔔 Forgot Password Request Received for:', email);
 
   try {
     // Step 1: Check if email exists
-    const { rows } = await db.query('SELECT id, email FROM users WHERE email = $1', [email]);
+    const { rows } = await db.query('SELECT * FROM users WHERE email = $1', [email]);
     if (rows.length === 0) {
-      console.log('❌ Email not found in DB. Silent success.');
-      return res.status(200).json({ 
-        message: 'If this email exists, a reset token has been sent' 
-      });
+      console.log('❌ Email not found in DB. Silent success response sent.');
+      return res.status(200).json({ message: 'If this email exists, a reset token has been sent' });
     }
 
     const user = rows[0];
-    console.log('✅ User found:', user.email);
+    console.log('✅ User found in DB:', user.email);
 
-    // Step 2: Generate reset token
+    // Step 2: Generate token and expiry
     const resetToken = crypto.randomBytes(32).toString('hex');
-    const resetTokenExpires = new Date(Date.now() + 3600000); // 1 hour from now
+    const resetTokenExpires = new Date(Date.now() + 3600000); // 1 hour
+    console.log('🔑 Reset Token Generated:', resetToken);
 
-    // Step 3: Send email via Apps Script
-    let emailSuccess = false;
-    try {
-      console.log('📤 Sending email via Apps Script...');
-      const scriptResponse = await axios.post(
-        'https://script.google.com/macros/s/AKfycbxxcVlZFML2RUBs577qK_8BvnBi0FSWekNniMqH3bY8iCc9UJ0V9laujLbLZXC4bA4/exec?path=forgot-password',
-        { email: user.email, token: resetToken },
-        { timeout: 5000 }
-      );
+    // Step 3: Store token in DB
+    await db.query(
+      'UPDATE users SET reset_token = $1, reset_token_expires = $2 WHERE id = $3',
+      [resetToken, resetTokenExpires, user.id]
+    );
+    console.log('💾 Reset token saved in DB with expiry:', resetTokenExpires.toISOString());
 
-      const data = scriptResponse.data;
-      if (data.success) {
-        console.log('✅ Email request succeeded:', data.message);
-        emailSuccess = true;
-      } else {
-        console.error('❌ Apps Script failed:', data.message);
+    // Step 4: Send token to Apps Script for email
+    console.log('📤 Sending token to Apps Script...');
+    const scriptResponse = await axios.post(
+      'https://script.google.com/macros/s/AKfycbxxcVlZFML2RUBs577qK_8BvnBi0FSWekNniMqH3bY8iCc9UJ0V9laujLbLZXC4bA4/exec?path=forgot-password',
+      {
+        email: user.email,
+        token: resetToken
       }
-    } catch (emailErr) {
-      console.error('🔥 Email send failed:', emailErr.message);
-    }
+    );
+    console.log('📨 Apps Script Response:', scriptResponse.data);
 
-    // Step 4: Save token only if email was sent
-    if (emailSuccess) {
-      await db.query(
-        'UPDATE users SET reset_token = $1, reset_token_expires = $2 WHERE id = $3',
-        [resetToken, resetTokenExpires, user.id]
-      );
-      console.log('💾 Reset token saved to DB after email success');
-    } else {
-      console.log('🚫 Email failed → not saving token');
-    }
-
-    // Step 5: Always send silent success response
-    return res.status(200).json({
+    // Step 5: Final success response to client
+    console.log('✅ Password reset process complete.');
+    res.status(200).json({
       message: 'If this email exists, a reset token has been sent'
+      // Optionally include resetToken in dev
     });
 
   } catch (err) {
-    console.error('🔥 Forgot password error:', err.message);
-    return res.status(500).json({ message: 'Internal Server Error' });
+    console.error('🔥 ERROR in forgot-password:', err);
+    res.status(500).json({ error: err.message });
   }
 });
+
 
 app.get('/admin/users', authenticateToken, authorizeRole('admin'), async (req, res) => {
   try {
