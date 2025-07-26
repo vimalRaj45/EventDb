@@ -138,23 +138,17 @@ app.post('/api/auth/login', async (req, res) => {
 /* --------------------- EVENTS --------------------- */
 app.get('/api/events', async (req, res) => {
   try {
-    const { status } = req.query;
-    let query = 'SELECT * FROM events';
-    let params = [];
-    
-    if (status) {
-      query += ' WHERE status = $1 ORDER BY start_date ASC';
-      params.push(status);
-    } else {
-      query += ' ORDER BY start_date ASC';
-    }
-    
-    const { rows } = await db.query(query, params);
+    const { rows } = await db.query(`
+      SELECT * FROM events
+      ORDER BY start_date ASC
+    `);
+
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 app.get('/api/events/:id', async (req, res) => {
   try {
@@ -176,7 +170,7 @@ app.get('/api/events/:id', async (req, res) => {
   }
 });
 
-app.post('/api/events', authenticateToken, authorizeRole('admin'), async (req, res) => {
+app.post('/api/events', async (req, res) => {
   const {
     title,
     description,
@@ -190,7 +184,9 @@ app.post('/api/events', authenticateToken, authorizeRole('admin'), async (req, r
     registration_deadline,
     max_participants,
     status = 'upcoming',
-    event_fee = 0  // Accept numeric(10,2)
+    event_fee = 0,
+    image_urls = [],
+    organizer_id 
   } = req.body;
 
   try {
@@ -198,17 +194,17 @@ app.post('/api/events', authenticateToken, authorizeRole('admin'), async (req, r
       `INSERT INTO events (
         title, description, detailed_description, rules, event_type,
         poster_url, banner_url, start_date, end_date, registration_deadline,
-        max_participants, status, organizer_id, event_fee
+        max_participants, status, organizer_id, event_fee, image_urls
       ) VALUES (
         $1, $2, $3, $4, $5,
         $6, $7, $8, $9, $10,
-        $11, $12, $13, $14
+        $11, $12, $13, $14, $15
       )
       RETURNING *`,
       [
         title, description, detailed_description, rules, event_type,
         poster_url, banner_url, start_date, end_date, registration_deadline,
-        max_participants, status, req.user.id, event_fee
+        max_participants, status, organizer_id, event_fee, image_urls
       ]
     );
 
@@ -218,7 +214,9 @@ app.post('/api/events', authenticateToken, authorizeRole('admin'), async (req, r
   }
 });
 
-app.put('/api/events/:id', authenticateToken, authorizeRole('admin'), async (req, res) => {
+
+
+app.put('/api/events/:id', async (req, res) => {
   const eventId = req.params.id;
   const {
     title,
@@ -233,7 +231,9 @@ app.put('/api/events/:id', authenticateToken, authorizeRole('admin'), async (req
     registration_deadline,
     max_participants,
     status,
-    event_fee = 0  // Accept updated fee
+    event_fee = 0,
+    organizer_id,
+    image_urls = []
   } = req.body;
 
   try {
@@ -252,13 +252,15 @@ app.put('/api/events/:id', authenticateToken, authorizeRole('admin'), async (req
         max_participants = $11,
         status = $12,
         event_fee = $13,
+        image_urls = $14,
+        organizer_id = $15,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $14
+      WHERE id = $16
       RETURNING *`,
       [
         title, description, detailed_description, rules, event_type,
         poster_url, banner_url, start_date, end_date, registration_deadline,
-        max_participants, status, event_fee, eventId
+        max_participants, status, event_fee, image_urls, organizer_id, eventId
       ]
     );
 
@@ -271,6 +273,7 @@ app.put('/api/events/:id', authenticateToken, authorizeRole('admin'), async (req
     res.status(500).json({ error: err.message });
   }
 });
+
 
 app.get('/api/userpayments', authenticateToken, async (req, res) => {
   const userId = req.user.id; // ✅ Extracted from JWT
