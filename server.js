@@ -3581,6 +3581,101 @@ app.put('/referralsedit/:email', async (req, res) => {
 });
 
 
+// Configure multer for memory storage
+const storage = multer.memoryStorage();
+const upload2 = multer({
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+    files: 5 // Maximum 5 files
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'), false);
+    }
+  }
+});
+
+// ✅ Image upload endpoint
+app.post('/api/upload-images45', upload2.array('images', 5), async (req, res) => {
+  try {
+    const files = req.files;
+    console.log('\n🔍 Received Files:', files?.length || 0);
+
+    if (!files || files.length === 0) {
+      return res.status(400).json({ error: 'No image files provided' });
+    }
+
+    const apiKey = 'chv_Nxek_55f1b4308b396b20731bcf324a6ec585e5a7654e2a024955d69e15c47e31a4b96d5dde911c5c42a07e77cd4b85a3737e148c0d4544ad50d408aa372b94b9a7f0';
+    const uploadedUrls = [];
+
+    for (const [index, file] of files.entries()) {
+      console.log(`\n📁 Processing file ${index + 1}:`);
+      console.log('   Name:', file.originalname);
+      console.log('   Type:', file.mimetype);
+      console.log('   Size:', file.size, 'bytes');
+      console.log('   Buffer length:', file.buffer?.length);
+
+      const formData = new FormData();
+      formData.append('source', file.buffer, {
+        filename: file.originalname,
+        contentType: file.mimetype,
+      });
+
+      try {
+        const response = await axios.post('https://freeimghost.net/api/1/upload', formData, {
+          headers: {
+            ...formData.getHeaders(),
+            'X-API-Key': apiKey,
+          },
+        });
+
+        const data = response.data;
+        console.log('   ✅ Response Status Code:', data?.status_code);
+
+        if (data?.status_code === 200 && data.image?.url) {
+          console.log('   ✅ Uploaded Image URL:', data.image.url);
+          uploadedUrls.push(data.image.url);
+        } else {
+          console.warn('   ❌ Upload failed:', data?.error?.message || 'Unknown response error');
+          uploadedUrls.push({ error: data?.error?.message || 'Invalid response from host' });
+        }
+
+      } catch (err) {
+        console.error('   ❌ Upload error:', err.message);
+        if (err.response?.data) {
+          console.error('   ❌ Response body:', err.response.data);
+        }
+        uploadedUrls.push({ error: err.message });
+      }
+    }
+
+    const failed = uploadedUrls.filter(u => u.error);
+    if (failed.length > 0) {
+      console.warn(`⚠️ ${failed.length} uploads failed`);
+      return res.status(207).json({
+        message: 'Some images failed to upload',
+        uploaded: uploadedUrls,
+        failedCount: failed.length,
+      });
+    }
+
+    console.log('✅ All images uploaded successfully');
+    res.json({
+      success: true,
+      uploaded: uploadedUrls,
+    });
+
+  } catch (err) {
+    console.error('💥 Server error:', err);
+    res.status(500).json({
+      error: 'Server error during upload',
+      details: err.message,
+    });
+  }
+});
 
 
 
