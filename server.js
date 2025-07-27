@@ -3678,6 +3678,51 @@ app.post('/api/upload-images45', upload2.array('images', 5), async (req, res) =>
 });
 
 
+// PUT /api/internships/:id/image
+app.put('/api/internships/:id/image', async (req, res) => {
+  const { id } = req.params;
+  const { imgurl, payment_qr } = req.body;
+
+  try {
+    await db.query(
+      `UPDATE internships 
+       SET imgurl = COALESCE($1, imgurl),
+           payment_qr = COALESCE($2, payment_qr)
+       WHERE id = $3`,
+      [imgurl, payment_qr, id]
+    );
+
+    res.json({ success: true, message: 'Internship image(s) updated.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: 'Error updating internship images.' });
+  }
+});
+
+
+
+// PUT /api/events/:id/images
+app.put('/api/events/:id/images', async (req, res) => {
+  const { id } = req.params;
+  const { poster_url, banner_url, image_urls } = req.body;
+
+  try {
+    await db.query(`
+      UPDATE events SET 
+        poster_url = COALESCE($1, poster_url),
+        banner_url = COALESCE($2, banner_url),
+        image_urls = COALESCE($3, image_urls)
+      WHERE id = $4
+    `, [poster_url, banner_url, image_urls, id]);
+
+    res.json({ success: true, message: 'Event images updated.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: 'Error updating event images.' });
+  }
+});
+
+
 
 // for uptime Express example
 app.get('/ping', (req, res) => res.send('Pong!'));
