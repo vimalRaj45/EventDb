@@ -859,7 +859,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 });
 
 
-app.get('/admin/users', async (req, res) => {
+app.get('/admin/users', authenticateToken, authorizeRole('admin'), async (req, res) => {
   try {
     const query = `
       WITH user_data AS (
