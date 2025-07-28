@@ -91,38 +91,33 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
+// /api/auth/login
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
-  
+
   try {
-    const { rows } = await db.query(
-      'SELECT * FROM users WHERE email = $1',
-      [email]
-    );
-    
+    const { rows } = await db.query('SELECT * FROM users WHERE email = $1', [email]);
+
     if (rows.length === 0) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      return res.status(401).json({ error: 'Email not found. Please register first.' });
     }
-    
+
     const user = rows[0];
     const validPassword = await bcrypt.compare(password, user.password_hash);
-    
+
     if (!validPassword) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      return res.status(401).json({ error: 'Incorrect password. Please try again.' });
     }
-    
-    // Update last login
-    await db.query(
-      'UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1',
-      [user.id]
-    );
-    
+
+    // Optional: track login time
+    await db.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
+
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
       JWT_SECRET,
-      { expiresIn: '24h' }
+      { expiresIn: '2h' }
     );
-    
+
     res.json({
       token,
       user: {
@@ -133,9 +128,10 @@ app.post('/api/auth/login', async (req, res) => {
       }
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Server error. Please try again later.' });
   }
 });
+
 
 /* --------------------- EVENTS --------------------- */
 app.get('/api/events', async (req, res) => {
