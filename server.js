@@ -31,9 +31,10 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 // Database connection
 const db = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://postgres.xxotzadlcmmromgruaoi:Vimalboss@45@aws-0-ap-south-1.pooler.supabase.com:6543/postgres',
+  connectionString: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_si3IB9NQVSat@ep-proud-sky-a7cz4q7g-pooler.ap-southeast-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require',
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
+
 
 // JWT Secret
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
