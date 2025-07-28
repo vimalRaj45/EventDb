@@ -1,5 +1,3 @@
-
-
 require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -813,9 +811,9 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     // Step 1: Check if email exists
     const { rows } = await db.query('SELECT * FROM users WHERE email = $1', [email]);
     if (rows.length === 0) {
-      console.log('❌ Email not found in DB. Silent success response sent.');
-      return res.status(200).json({ message: 'If this email exists, a reset token has been sent' });
-    }
+  return res.status(200).json({ found: false, message: 'Email not found.' });
+}
+
 
     const user = rows[0];
     console.log('✅ User found in DB:', user.email);
