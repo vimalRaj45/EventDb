@@ -844,6 +844,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     // Step 5: Final success response to client
     console.log('✅ Password reset process complete.');
     res.status(200).json({
+      found: true,
       message: 'If this email exists, a reset token has been sent'
       // Optionally include resetToken in dev
     });
