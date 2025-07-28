@@ -30,8 +30,9 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
 // Database connection
+// Database connection
 const db = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_si3IB9NQVSat@ep-proud-sky-a7cz4q7g-pooler.ap-southeast-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require',
+  connectionString: process.env.DATABASE_URL || 'postgresql://postgres.adxqtfqlbrgbrskpwbyc:Vimalboss@45@aws-0-ap-south-1.pooler.supabase.com:6543/postgres',
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
