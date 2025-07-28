@@ -1589,15 +1589,6 @@ function generateReferralCode() {
 }
 
 
-async function uploadToImgBB(buffer) {
-  const base64 = buffer.toString('base64');
-  const form = new URLSearchParams();
-  form.append('key', '76954d664f0beaf57b8c5a5b0eca84e6');
-  form.append('image', base64);
-
-  const response = await axios.post('https://api.imgbb.com/1/upload', form);
-  return response.data.data.url;
-}
 
 // 🔐 Student Login
 app.post('/stdlogin', async (req, res) => {
@@ -1613,6 +1604,99 @@ app.post('/stdlogin', async (req, res) => {
 });
 
 // 📝 Enhanced Register Student (Pending) with Referral Validation
+
+async function uploadImageWithFallback(file) {
+  console.log('🟡 Starting image upload with fallback strategy...');
+  console.log('📁 File info:');
+  console.log('   🔸 Name:', file.originalname);
+  console.log('   🔸 MIME Type:', file.mimetype);
+  console.log('   🔸 Buffer Size:', file.buffer.length, 'bytes');
+
+  // Try FreeImageHost First
+  try {
+    console.log('\n🔼 Attempting upload to FreeImageHost...');
+
+    const freeImageForm = new FormData();
+    freeImageForm.append('source', file.buffer, file.originalname); // correct usage
+
+    const freeImageResponse = await axios.post(
+      'https://freeimghost.net/api/1/upload',
+      freeImageForm,
+      {
+        headers: {
+          ...freeImageForm.getHeaders(),
+          'X-API-Key': 'chv_Nxek_55f1b4308b396b20731bcf324a6ec585e5a7654e2a024955d69e15c47e31a4b96d5dde911c5c42a07e77cd4b85a3737e148c0d4544ad50d408aa372b94b9a7f0',
+        },
+      }
+    );
+
+    console.log('✅ FreeImageHost response:', freeImageResponse.data);
+
+    if (
+      freeImageResponse.data?.status_code === 200 &&
+      freeImageResponse.data.image?.url
+    ) {
+      console.log('✅ Upload successful via FreeImageHost');
+      return freeImageResponse.data.image.url;
+    }
+
+    // If duplicate (code 101), but valid URL is provided
+    if (
+      freeImageResponse.data?.status_code === 400 &&
+      freeImageResponse.data?.error?.code === 101 &&
+      freeImageResponse.data?.image?.url
+    ) {
+      console.log('🟡 Duplicate upload detected. Using existing FreeImageHost URL.');
+      return freeImageResponse.data.image.url;
+    }
+
+    console.log('⚠️ FreeImageHost responded but did not return a valid image URL');
+  } catch (error) {
+    console.error('❌ FreeImageHost upload failed:', error.message);
+    if (error.response) {
+      console.error('📄 Response body:', error.response.data);
+    }
+  }
+
+  // Fallback to ImgBB
+  try {
+    console.log('\n🔁 Attempting fallback to ImgBB...');
+
+    const base64Image = file.buffer.toString('base64');
+    console.log('🔢 Base64 Length:', base64Image.length);
+
+    const imgbbForm = new FormData();
+    imgbbForm.append('key', '76954d664f0beaf57b8c5a5b0eca84e6');
+    imgbbForm.append('image', base64Image);
+
+    const imgbbResponse = await axios.post(
+      'https://api.imgbb.com/1/upload',
+      imgbbForm,
+      {
+        headers: imgbbForm.getHeaders(),
+      }
+    );
+
+    console.log('✅ ImgBB response:', imgbbResponse.data);
+
+    if (imgbbResponse.data?.success && imgbbResponse.data.data?.url) {
+      console.log('✅ Upload successful via ImgBB');
+      return imgbbResponse.data.data.url;
+    }
+
+    console.log('⚠️ ImgBB responded but did not return a valid image URL');
+  } catch (error) {
+    console.error('❌ ImgBB upload also failed:', error.message);
+    if (error.response) {
+      console.error('📄 Response body:', error.response.data);
+    }
+  }
+
+  throw new Error('❌ Both image upload services failed');
+}
+
+
+// 📝 Enhanced Register Student (Pending) with Referral Validation and imgBB fallback
 app.post('/students', upload.fields([
   { name: 'clg_id_photo' },
   { name: 'photo' },
@@ -1643,9 +1727,19 @@ app.post('/students', upload.fields([
     );
     if (check.rows.length > 0) return res.status(409).json({ error: 'Student already exists.' });
 
-    const clg_id_photo_url = req.files?.clg_id_photo ? await uploadToImgBB(req.files.clg_id_photo[0].buffer) : null;
-    const photo_url = req.files?.photo ? await uploadToImgBB(req.files.photo[0].buffer) : null;
-    const signature_photo_url = req.files?.signature_photo ? await uploadToImgBB(req.files.signature_photo[0].buffer) : null;
+    // Upload images with fallback
+    let clg_id_photo_url, photo_url, signature_photo_url;
+    
+    try {
+      [clg_id_photo_url, photo_url, signature_photo_url] = await Promise.all([
+        req.files?.clg_id_photo ? uploadImageWithFallback(req.files.clg_id_photo[0]) : null,
+        req.files?.photo ? uploadImageWithFallback(req.files.photo[0]) : null,
+        req.files?.signature_photo ? uploadImageWithFallback(req.files.signature_photo[0]) : null
+      ]);
+    } catch (uploadError) {
+      console.error('Image upload failed:', uploadError);
+      return res.status(500).json({ error: 'Failed to upload one or more images' });
+    }
 
     const insertQuery = `
       INSERT INTO students (
@@ -1672,10 +1766,10 @@ app.post('/students', upload.fields([
     const result = await db.query(insertQuery, values);
     res.json({ message: 'Student registered successfully. Awaiting approval.', id: result.rows[0].id });
   } catch (error) {
+    console.error('Registration error:', error);
     res.status(500).json({ error: error.message });
   }
 });
-
 // ✅ Enhanced Admin Approves Student with Referral Tracking
 app.put('/students/approve/:id', async (req, res) => {
   try {
