@@ -3496,6 +3496,7 @@ app.post('/referrals', async (req, res) => {
     msg,
     ph_no,
     refer_code,
+    additional // <-- added here
   } = req.body;
 
   try {
@@ -3503,11 +3504,11 @@ app.post('/referrals', async (req, res) => {
       `INSERT INTO referral_income (
         email, stud_name, total_participants, reward_amount_inr, payment_date, transaction_id,
         downline_name, downline_participants, total_downline_participants, current_participants,
-        total_invitations, inter_total, profile_picture_url, role, msg,ph_no,refer_code
+        total_invitations, inter_total, profile_picture_url, role, msg, ph_no, refer_code, additional
       ) VALUES (
         $1, $2, $3, $4, $5, $6,
         $7, $8, $9, $10,
-        $11, $12, $13, $14, $15,$16,$17
+        $11, $12, $13, $14, $15, $16, $17, $18
       ) RETURNING *`,
       [
         email,
@@ -3527,6 +3528,7 @@ app.post('/referrals', async (req, res) => {
         msg,
         ph_no,
         refer_code,
+        additional // <-- added here
       ]
     );
     res.status(201).json(result.rows[0]);
@@ -3534,6 +3536,7 @@ app.post('/referrals', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 // ✅ Update referral
 app.put('/referrals/:id', async (req, res) => {
@@ -3556,6 +3559,7 @@ app.put('/referrals/:id', async (req, res) => {
     msg,
     ph_no,
     refer_code,
+    additional // <-- added here
   } = req.body;
 
   try {
@@ -3577,8 +3581,9 @@ app.put('/referrals/:id', async (req, res) => {
         role = $14,
         msg = $15,
         ph_no = $16,
-        refer_code = $17
-      WHERE id = $18
+        refer_code = $17,
+        additional = $18
+      WHERE id = $19
       RETURNING *`,
       [
         email,
@@ -3598,7 +3603,8 @@ app.put('/referrals/:id', async (req, res) => {
         msg,
         ph_no,
         refer_code,
-        id // ✅ This is now $18
+        additional, // <-- added here
+        id // <-- $19
       ]
     );
 
@@ -3607,6 +3613,7 @@ app.put('/referrals/:id', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 
 // ✅ Delete referral
