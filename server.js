@@ -31,7 +31,11 @@ app.use(bodyParser.urlencoded({ extended: true }));
 // Database connection
 const db = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgresql://postgres.adxqtfqlbrgbrskpwbyc:Vimalboss@45@aws-0-ap-south-1.pooler.supabase.com:6543/postgres',
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  max: 18,                    // Safe: Up to 15 connections
+  keepAlive: true,
+  idleTimeoutMillis: 15000,  // Idle clients disconnected after 15s
+  connectionTimeoutMillis: 5000 // Timeout if connection takes over 5s
 });
 
 
@@ -3838,3 +3842,4 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
