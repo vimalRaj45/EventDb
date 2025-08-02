@@ -18,11 +18,23 @@ const FormData = require('form-data'); // ✅ to send image as multipart
 app.use(bodyParser.json({ limit: '20mb' })); 
 app.use(bodyParser.urlencoded({ extended: true, limit: '20mb' }));
 
-// Middleware
+const allowedOrigins = [
+  'https://easyevents.netlify.app',
+  'https://edwyna.org'
+];
+
 app.use(cors({
-  origin: '*',
+  origin: function (origin, callback) {
+    // Allow requests with no origin (e.g., curl, mobile apps)
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('❌ Not allowed by CORS'));
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true // Only if you're using cookies or HTTP credentials
 }));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -3861,3 +3873,4 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
