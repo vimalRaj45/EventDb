@@ -3867,9 +3867,13 @@ app.put('/api/events/:id/images', async (req, res) => {
 
 
 
-// for uptime Express example
-app.get('/ping', (req, res) => res.send('Pong!'));
-
+// For uptime (safe for all sources)
+app.get('/ping', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*'); // Allow all origins
+  res.setHeader('Access-Control-Allow-Methods', 'GET');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.status(200).json({ status: '✅ Server is alive', time: new Date().toISOString() });
+});
 
 // Error handling middleware
 app.use((err, _req, res, _next) => {
@@ -3883,5 +3887,6 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
 
 
