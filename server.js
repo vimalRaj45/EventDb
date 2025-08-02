@@ -3545,7 +3545,7 @@ app.post('/referrals', async (req, res) => {
 // ✅ Update referral
 app.put('/referrals/:id', async (req, res) => {
   const { id } = req.params;
-  const {
+  let {
     email,
     stud_name,
     total_participants,
@@ -3563,10 +3563,27 @@ app.put('/referrals/:id', async (req, res) => {
     msg,
     ph_no,
     refer_code,
-    additional // <-- added here
+    additional
   } = req.body;
 
+  const toNullIfEmpty = value => value === '' ? null : value;
+
+  console.log('🔁 PUT /referrals/:id called');
+  console.log('🆔 ID:', id);
+  console.log('📦 Request Body:', req.body);
+
   try {
+    // 🔍 Step 1: Get current referral data
+    const existing = await db.query('SELECT profile_picture_url FROM referral_income WHERE id = $1', [id]);
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ error: 'Referral not found' });
+    }
+
+    // 🛡️ Step 2: Fallback to existing image if new one is missing
+    if (!profile_picture_url || profile_picture_url.trim() === '') {
+      profile_picture_url = existing.rows[0].profile_picture_url;
+    }
+
     const result = await db.query(
       `UPDATE referral_income SET
         email = $1,
@@ -3590,30 +3607,32 @@ app.put('/referrals/:id', async (req, res) => {
       WHERE id = $19
       RETURNING *`,
       [
-        email,
-        stud_name,
-        total_participants,
-        reward_amount_inr,
-        payment_date,
-        transaction_id,
-        downline_name,
-        downline_participants,
-        total_downline_participants,
-        current_participants,
-        total_invitations,
-        inter_total,
-        profile_picture_url,
-        role,
-        msg,
-        ph_no,
-        refer_code,
-        additional, // <-- added here
-        id // <-- $19
+        toNullIfEmpty(email),
+        toNullIfEmpty(stud_name),
+        toNullIfEmpty(total_participants),
+        toNullIfEmpty(reward_amount_inr),
+        toNullIfEmpty(payment_date),
+        toNullIfEmpty(transaction_id),
+        toNullIfEmpty(downline_name),
+        toNullIfEmpty(downline_participants),
+        toNullIfEmpty(total_downline_participants),
+        toNullIfEmpty(current_participants),
+        toNullIfEmpty(total_invitations),
+        toNullIfEmpty(inter_total),
+        profile_picture_url, // ✅ preserved if missing in req.body
+        toNullIfEmpty(role),
+        toNullIfEmpty(msg),
+        toNullIfEmpty(ph_no),
+        toNullIfEmpty(refer_code),
+        toNullIfEmpty(additional),
+        id
       ]
     );
 
+    console.log('✅ Update successful:', result.rows[0]);
     res.json(result.rows[0]);
   } catch (err) {
+    console.error('❌ Error updating referral:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -3842,4 +3861,3 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
-
