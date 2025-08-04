@@ -20,7 +20,7 @@ app.use(bodyParser.urlencoded({ extended: true, limit: '20mb' }));
 
 // Middleware
 app.use(cors({
-  origin: '*',
+  origin: '',
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
@@ -3268,9 +3268,9 @@ app.post('/api/targets/increment-by-referral', async (req, res) => {
   }
 
   try {
-    // Step 1: Find student ID using referral code
+    // Step 1: Get student by referral code
     const refStudentRes = await db.query(
-      `SELECT id FROM students WHERE referral_code = $1`,
+      `SELECT id, referrer_code, is_mentor FROM students WHERE referral_code = $1`,
       [used_referral_code]
     );
 
@@ -3279,8 +3279,10 @@ app.post('/api/targets/increment-by-referral', async (req, res) => {
     }
 
     const studentId = refStudentRes.rows[0].id;
+    const referrerCode = refStudentRes.rows[0].referrer_code;
+    const isMentor = refStudentRes.rows[0].is_mentor;
 
-    // Step 2: Get latest target for that student in that event
+    // Step 2: Update the target of the person who owns the code
     const targetRes = await db.query(
       `SELECT id FROM event_targets
        WHERE user_id = $1 AND event_id = $2
@@ -3295,7 +3297,6 @@ app.post('/api/targets/increment-by-referral', async (req, res) => {
 
     const targetId = targetRes.rows[0].id;
 
-    // Step 3: Increment attained count
     const updated = await db.query(
       `UPDATE event_targets
        SET attained = attained + 1
@@ -3304,11 +3305,48 @@ app.post('/api/targets/increment-by-referral', async (req, res) => {
       [targetId]
     );
 
+    let mentorUpdate = null;
+
+    // Step 3: If referral code belongs to a student, also update their mentor (if exists)
+    if (!isMentor && referrerCode) {
+      const mentorRes = await db.query(
+        `SELECT id FROM students WHERE referral_code = $1`,
+        [referrerCode]
+      );
+
+      if (mentorRes.rows.length > 0) {
+        const mentorId = mentorRes.rows[0].id;
+
+        const mentorTargetRes = await db.query(
+          `SELECT id FROM event_targets
+           WHERE user_id = $1 AND event_id = $2
+           ORDER BY assigned_at DESC
+           LIMIT 1`,
+          [mentorId, event_id]
+        );
+
+        if (mentorTargetRes.rows.length > 0) {
+          const mentorTargetId = mentorTargetRes.rows[0].id;
+
+          mentorUpdate = await db.query(
+            `UPDATE event_targets
+             SET attained = attained + 1
+             WHERE id = $1
+             RETURNING *`,
+            [mentorTargetId]
+          );
+        }
+      }
+    }
+
+    // Final response
     res.json({
       success: true,
-      message: 'Progress incremented for referral target',
-      data: updated.rows[0]
+      message: `Progress incremented for ${isMentor ? 'mentor' : 'student'}${mentorUpdate ? ' and their mentor' : ''}`,
+      student_target: updated.rows[0],
+      mentor_target: mentorUpdate ? mentorUpdate.rows[0] : null
     });
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
@@ -3872,6 +3910,5 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
-
 
 
