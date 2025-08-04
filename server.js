@@ -373,13 +373,14 @@ const {
 
   try {
     // Check if event exists and is open for registration
-    const eventResult = await db.query(
-      `SELECT * FROM events 
-       WHERE id = $1 
-       AND status IN ($2, $3)
-       AND (registration_deadline IS NULL OR registration_deadline > NOW())`,
-      [eventId, 'upcoming', 'ongoing']
-    );
+   const eventResult = await db.query(
+  `SELECT * FROM events 
+   WHERE id = $1 
+   AND status IN ($2, $3)
+   AND (registration_deadline IS NULL OR registration_deadline::timestamp > NOW())`,
+  [eventId, 'upcoming', 'ongoing']
+);
+
 
     if (eventResult.rows.length === 0) {
       return res.status(400).json({ error: 'Event not available for registration' });
@@ -3861,3 +3862,4 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
