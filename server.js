@@ -427,7 +427,7 @@ const {
 });
 
 app.put('/api/participants/:id/payment', authenticateToken, authorizeRole('admin'), async (req, res) => {
-  const participantId = parseInt(req.params.id, 10);  // ensure it's a number
+  const participantId = parseInt(req.params.id, 10);
   const { payment_verified } = req.body;
 
   if (typeof payment_verified !== 'boolean') {
@@ -439,7 +439,7 @@ app.put('/api/participants/:id/payment', authenticateToken, authorizeRole('admin
       `UPDATE participants
        SET payment_verified = $1,
            verified_at = CASE 
-                           WHEN $1 = true THEN TO_CHAR(NOW(), 'YYYY-MM-DD HH24:MI:SS')  -- cast to text format
+                           WHEN $1 = true THEN NOW()
                            ELSE NULL 
                         END
        WHERE id = $2
@@ -453,10 +453,11 @@ app.put('/api/participants/:id/payment', authenticateToken, authorizeRole('admin
 
     res.json(result.rows[0]);
   } catch (err) {
-    console.error('Payment status update failed:', err);
+    console.error('Payment status update failed:', err.stack || err.message || err);
     res.status(500).json({ error: err.message });
   }
 });
+
 
 
 
@@ -3871,5 +3872,6 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
 
 
