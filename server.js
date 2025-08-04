@@ -426,9 +426,8 @@ const {
   }
 });
 
-// --------------------- UPDATE PAYMENT STATUS (PUT) ---------------------
 app.put('/api/participants/:id/payment', authenticateToken, authorizeRole('admin'), async (req, res) => {
-  const participantId = req.params.id;
+  const participantId = parseInt(req.params.id, 10);  // ensure it's a number
   const { payment_verified } = req.body;
 
   if (typeof payment_verified !== 'boolean') {
@@ -436,18 +435,17 @@ app.put('/api/participants/:id/payment', authenticateToken, authorizeRole('admin
   }
 
   try {
-   const result = await db.query(
-  `UPDATE participants
-   SET payment_verified = $1,
-       verified_at = CASE 
-                       WHEN $1 = true THEN NOW()::text 
-                       ELSE NULL 
-                    END
-   WHERE id = $2
-   RETURNING *`,
-  [payment_verified, participantId]
-);
-
+    const result = await db.query(
+      `UPDATE participants
+       SET payment_verified = $1,
+           verified_at = CASE 
+                           WHEN $1 = true THEN TO_CHAR(NOW(), 'YYYY-MM-DD HH24:MI:SS')  -- cast to text format
+                           ELSE NULL 
+                        END
+       WHERE id = $2
+       RETURNING *`,
+      [payment_verified, participantId]
+    );
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Participant not found' });
@@ -3873,4 +3871,5 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
 
