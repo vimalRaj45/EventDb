@@ -20,7 +20,7 @@ app.use(bodyParser.urlencoded({ extended: true, limit: '20mb' }));
 
 // Middleware
 app.use(cors({
-  origin: '',
+  origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
