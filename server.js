@@ -18,43 +18,12 @@ const FormData = require('form-data'); // ✅ to send image as multipart
 app.use(bodyParser.json({ limit: '20mb' })); 
 app.use(bodyParser.urlencoded({ extended: true, limit: '20mb' }));
 
-// ✅ Trusted frontend origins
-const allowedOrigins = [
-  'https://easyevents.netlify.app',
-  'https://edwyna.org'
-];
-
-// For uptime (safe for all sources)
-app.get('/ping', (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*'); // Allow all origins
-  res.setHeader('Access-Control-Allow-Methods', 'GET');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.status(200).json({ status: '✅ Server is alive', time: new Date().toISOString() });
-});
-
-
-// ✅ CORS Middleware - Blocks all others including Postman, curl
+// Middleware
 app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true); // ✅ Allow
-    } else {
-      callback(new Error('❌ Not allowed by CORS')); // ❌ Block
-    }
-  },
+  origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
-
-// ✅ Extra Security: Block even direct access without CORS
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (!origin || !allowedOrigins.includes(origin)) {
-    return res.status(403).json({ message: '🚫 Forbidden: Invalid Origin' });
-  }
-  next();
-});
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
@@ -142,11 +111,8 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Incorrect password. Please try again.' });
     }
 
-   await db.query(
-  'UPDATE users SET last_login = CURRENT_TIMESTAMP::text WHERE id = $1',
-  [user.id]
-);
-
+    // Optional: track login time
+    await db.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
 
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
@@ -288,7 +254,7 @@ app.put('/api/events/:id', async (req, res) => {
         event_fee = $13,
         image_urls = $14,
         organizer_id = $15,
-        updated_at = CURRENT_TIMESTAMP::text
+        updated_at = CURRENT_TIMESTAMP
       WHERE id = $16
       RETURNING *`,
       [
@@ -398,28 +364,23 @@ app.delete('/api/events/:id', authenticateToken, authorizeRole('admin'), async (
 app.post('/api/events/:id/register', authenticateToken, async (req, res) => {
   const eventId = req.params.id;
   const userId = req.user.id;
+const {
+  registration_data = {},
+  transaction_id = null,
+  referral_code = null // Add this line
+} = req.body;
 
-  const {
-    registration_data = {},
-    transaction_id = null,
-    referral_code = null
-  } = req.body;
 
   try {
     // Check if event exists and is open for registration
-    const eventResult = await db.query(
-      `SELECT * FROM events 
-       WHERE id = $1 
-       AND status IN ($2, $3)
-       AND (
-         registration_deadline IS NULL 
-         OR (
-           registration_deadline ~ '^\d{4}-\d{2}-\d{2}.*$' 
-           AND registration_deadline::timestamp > NOW()
-         )
-       )`,
-      [eventId, 'upcoming', 'ongoing']
-    );
+   const eventResult = await db.query(
+  `SELECT * FROM events 
+   WHERE id = $1 
+   AND status IN ($2, $3)
+   AND (registration_deadline IS NULL OR registration_deadline::timestamp > NOW())`,
+  [eventId, 'upcoming', 'ongoing']
+);
+
 
     if (eventResult.rows.length === 0) {
       return res.status(400).json({ error: 'Event not available for registration' });
@@ -442,14 +403,15 @@ app.post('/api/events/:id/register', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Event has reached maximum participants' });
     }
 
-    // Register participant
+    // Register participant with transaction_id
     const { rows } = await db.query(
-      `INSERT INTO participants 
-        (user_id, event_id, registration_data, transaction_id, referral_code)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING *`,
-      [userId, eventId, registration_data, transaction_id, referral_code]
-    );
+  `INSERT INTO participants 
+    (user_id, event_id, registration_data, transaction_id, referral_code)
+   VALUES ($1, $2, $3, $4, $5)
+   RETURNING *`,
+  [userId, eventId, registration_data, transaction_id, referral_code]
+);
+
 
     // Increment current_participants count
     await db.query(
@@ -464,7 +426,6 @@ app.post('/api/events/:id/register', authenticateToken, async (req, res) => {
   }
 });
 
-
 // --------------------- UPDATE PAYMENT STATUS (PUT) ---------------------
 app.put('/api/participants/:id/payment', authenticateToken, authorizeRole('admin'), async (req, res) => {
   const participantId = req.params.id;
@@ -475,18 +436,14 @@ app.put('/api/participants/:id/payment', authenticateToken, authorizeRole('admin
   }
 
   try {
-   const result = await db.query(
-  `UPDATE participants
-   SET payment_verified = $1,
-       verified_at = CASE 
-                       WHEN $1 = true THEN NOW()::text 
-                       ELSE NULL 
-                    END
-   WHERE id = $2
-   RETURNING *`,
-  [payment_verified, participantId]
-);
-
+    const result = await db.query(
+      `UPDATE participants
+       SET payment_verified = $1,
+           verified_at = CASE WHEN $1 = true THEN NOW() ELSE NULL END
+       WHERE id = $2
+       RETURNING *`,
+      [payment_verified, participantId]
+    );
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Participant not found' });
@@ -1229,6 +1186,8 @@ app.post('/api/admin/internships/:id/set-payment-qr', async (req, res) => {
 });
 
 
+
+// 💳 SUBMIT PAYMENT and trigger APPLY if needed
 // 💳 SUBMIT PAYMENT and trigger APPLY if needed
 app.post('/api/internships/:id/submit-payment', authenticateToken, async (req, res) => {
   const userId = req.user.id;
@@ -3887,6 +3846,9 @@ app.put('/api/events/:id/images', async (req, res) => {
 
 
 
+// for uptime Express example
+app.get('/ping', (req, res) => res.send('Pong!'));
+
 
 // Error handling middleware
 app.use((err, _req, res, _next) => {
@@ -3900,6 +3862,3 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
-
-
-
