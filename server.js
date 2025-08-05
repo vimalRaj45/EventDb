@@ -1519,10 +1519,8 @@ app.put('/api/internships/:id', authenticateToken, authorizeRole('admin'), async
         imgurl = $6,
         status = $7,
         description = $8,
-        application_fee = $9,
-        updated_at = CURRENT_TIMESTAMP::text -- 👈 safely update string timestamp
-      WHERE id = $10
-      RETURNING *`,
+        application_fee = $9
+      WHERE id = $10 RETURNING *`,
       [
         company_name,
         position,
@@ -1537,17 +1535,12 @@ app.put('/api/internships/:id', authenticateToken, authorizeRole('admin'), async
       ]
     );
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Internship not found" });
-    }
-
     res.json(result.rows[0]);
   } catch (err) {
     console.error("❌ Update error:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
-
 
 
 
@@ -1585,6 +1578,8 @@ app.put('/api/admin/applications/:id/status', authenticateToken, authorizeRole('
     res.status(500).json({ error: err.message });
   }
 });
+
+
 
 
 // ✅ Get User by ID (Admin Only)
@@ -3939,6 +3934,7 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
 
 
 
