@@ -18,12 +18,43 @@ const FormData = require('form-data'); // ✅ to send image as multipart
 app.use(bodyParser.json({ limit: '20mb' })); 
 app.use(bodyParser.urlencoded({ extended: true, limit: '20mb' }));
 
-// Middleware
+// ✅ Trusted frontend origins
+const allowedOrigins = [
+  'https://easyevents.netlify.app',
+  'https://edwyna.org'
+];
+
+// For uptime (safe for all sources)
+app.get('/ping', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*'); // Allow all origins
+  res.setHeader('Access-Control-Allow-Methods', 'GET');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.status(200).json({ status: '✅ Server is alive', time: new Date().toISOString() });
+});
+
+
+// ✅ CORS Middleware - Blocks all others including Postman, curl
 app.use(cors({
-  origin: '*',
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true); // ✅ Allow
+    } else {
+      callback(new Error('❌ Not allowed by CORS')); // ❌ Block
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
 }));
+
+// ✅ Extra Security: Block even direct access without CORS
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (!origin || !allowedOrigins.includes(origin)) {
+    return res.status(403).json({ message: '🚫 Forbidden: Invalid Origin' });
+  }
+  next();
+});
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
@@ -3910,5 +3941,6 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
 
 
