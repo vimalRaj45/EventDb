@@ -3918,24 +3918,24 @@ app.put('/api/events/:id/images', async (req, res) => {
   }
 });
 
-// 📌 GET Verified Participants for an Event
+
+// 📌 GET Verified and Pending Payment Counts for an Event
 app.get('/api/events/:id/verified', async (req, res) => {
   try {
     const { rows } = await db.query(
-      `SELECT p.*, u.name, u.email 
+      `SELECT
+         COUNT(*) FILTER (WHERE p.payment_verified = true) AS verified_count,
+         COUNT(*) FILTER (WHERE p.payment_verified = false) AS pending_count
        FROM participants p
-       JOIN users u ON p.user_id = u.id
-       WHERE p.event_id = $1 AND p.payment_verified = true
-       ORDER BY p.registered_at`,
+       WHERE p.event_id = $1`,
       [req.params.id]
     );
 
-    res.json(rows);
+    res.json(rows[0]); // returns { verified_count: x, pending_count: y }
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-
 
 
 // Error handling middleware
