@@ -3918,7 +3918,23 @@ app.put('/api/events/:id/images', async (req, res) => {
   }
 });
 
+// 📌 GET Verified Participants for an Event
+app.get('/api/events/:id/verified', async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT p.*, u.name, u.email 
+       FROM participants p
+       JOIN users u ON p.user_id = u.id
+       WHERE p.event_id = $1 AND p.payment_verified = true
+       ORDER BY p.registered_at`,
+      [req.params.id]
+    );
 
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 
 
@@ -3934,6 +3950,7 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
 
 
 
