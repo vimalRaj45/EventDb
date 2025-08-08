@@ -403,6 +403,10 @@ const {
 
 
   try {
+    // ✅ Check for missing transaction ID
+    if (!transaction_id || typeof transaction_id !== 'string' || transaction_id.trim() === '') {
+      return res.status(400).json({ error: 'Transaction ID is required' });
+    }
     // Check if event exists and is open for registration
    const eventResult = await db.query(
   `SELECT * FROM events 
@@ -3950,6 +3954,7 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
 
 
 
