@@ -3941,6 +3941,38 @@ app.get('/api/events/:id/verified', async (req, res) => {
   }
 });
 
+// 📌 Simple GET endpoint: get certificate link by email
+app.get('/api/certificates/link', async (req, res) => {
+  try {
+    const { email } = req.query;
+
+    if (!email) {
+      return res.status(400).json({ success: false, message: "Email is required" });
+    }
+
+    // Query the DB for that email
+    const result = await db.query(
+      `SELECT certificate_link FROM certificatenow WHERE email = $1 LIMIT 1`,
+      [email]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "No certificate found for this email" });
+    }
+
+    res.json({
+      success: true,
+      email,
+      certificate_link: result.rows[0].certificate_link
+    });
+
+  } catch (err) {
+    console.error("Error fetching certificate link:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+
 
 // Error handling middleware
 app.use((err, _req, res, _next) => {
@@ -3954,6 +3986,7 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
 
 
 
