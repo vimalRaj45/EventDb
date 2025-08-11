@@ -3942,9 +3942,10 @@ app.get('/api/events/:id/verified', async (req, res) => {
 });
 
 // 📌 Simple GET endpoint: get certificate link by email
-app.get('/api/certificates/link', async (req, res) => {
+// 📌 POST endpoint: get certificate link by email
+app.post('/api/certificates/link', async (req, res) => {
   try {
-    const { email } = req.query;
+    const { email } = req.body;
 
     if (!email) {
       return res.status(400).json({ success: false, message: "Email is required" });
