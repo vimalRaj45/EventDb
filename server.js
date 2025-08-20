@@ -223,7 +223,7 @@ app.post('/api/auth/login', async (req, res) => {
 
     // 4️⃣ Generate JWT
     const token = jwt.sign(
-      { id: user.id, email: user.email, user_type: user.user_type },
+      { id: user.id, email: user.email, user_type: user.user_type ,role: user.role },
       JWT_SECRET,
       { expiresIn: '2h' }
     );
@@ -235,7 +235,8 @@ app.post('/api/auth/login', async (req, res) => {
         name: user.name,
         email: user.email,
         contact_no: user.contact_no,
-        user_type: user.user_type
+        user_type: user.user_type,
+        role: user.role
       }
     });
 
@@ -4324,6 +4325,7 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
 
 
 
