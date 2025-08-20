@@ -17,7 +17,6 @@ const FormData = require('form-data'); // ✅ to send image as multipart
 // For JSON and Base64 uploads
 app.use(bodyParser.json({ limit: '20mb' })); 
 app.use(bodyParser.urlencoded({ extended: true, limit: '20mb' }));
-
 // ✅ Trusted frontend origins
 const allowedOrigins = [
   'https://easyevents.netlify.app',
@@ -55,6 +54,7 @@ app.use((req, res, next) => {
   }
   next();
 });
+
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
@@ -103,50 +103,123 @@ const authorizeRole = (role) => {
 
 /* --------------------- AUTHENTICATION --------------------- */
 app.post('/api/auth/register', async (req, res) => {
-  const { name, email, password, role = 'participant', contact_no } = req.body;
+  const {
+    name,
+    email,
+    password,
+    contact_no,
+    user_type,  // "school" | "college" | "passout"
+    // school student fields
+    first_name,
+    last_name,
+    date_of_birth,
+    gender,
+    school_name,
+    class_grade,
+    // college student fields
+    college_name,
+    course_degree,
+    year_of_study,
+    // passout student fields
+    degree_completed,
+    year_of_passing,
+    current_status,
+    // common address
+    city,
+    state,
+    pincode
+  } = req.body;
 
   try {
+    // hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // 1️⃣ Insert into users
     const { rows } = await db.query(
-      `INSERT INTO users (name, email, password_hash, role, contact_no) 
-       VALUES ($1, $2, $3, $4, $5) 
-       RETURNING id, name, email, role, contact_no, created_at`,
-      [name, email, hashedPassword, role, contact_no]
+      `INSERT INTO users (name, email, password_hash, contact_no, user_type)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, name, email, user_type, created_at`,
+      [name, email, hashedPassword, contact_no, user_type]
     );
 
-    res.status(201).json(rows[0]);
+    const userId = rows[0].id;
+
+    // 2️⃣ Insert into respective detail table
+    if (user_type === "school") {
+      await db.query(
+        `INSERT INTO school_students 
+          (user_id, first_name, last_name, date_of_birth, gender, school_name, class_grade, city, state, pincode)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [userId, first_name, last_name, date_of_birth, gender, school_name, class_grade, city, state, pincode]
+      );
+    } else if (user_type === "college") {
+      await db.query(
+        `INSERT INTO college_students 
+          (user_id, first_name, last_name, date_of_birth, gender, college_name, course_degree, year_of_study, city, state, pincode)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+        [userId, first_name, last_name, date_of_birth, gender, college_name, course_degree, year_of_study, city, state, pincode]
+      );
+    } else if (user_type === "passout") {
+      await db.query(
+        `INSERT INTO passout_students 
+          (user_id, first_name, last_name, date_of_birth, gender, college_name, degree_completed, year_of_passing, current_status, city, state, pincode)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+        [userId, first_name, last_name, date_of_birth, gender, college_name, degree_completed, year_of_passing, current_status, city, state, pincode]
+      );
+    }
+
+    res.status(201).json({
+      message: "User registered successfully",
+      user: rows[0]
+    });
+
   } catch (err) {
     if (err.code === '23505') {
       return res.status(409).json({ error: 'Email already exists' });
     }
+    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
 
+
+// /api/auth/login
 // /api/auth/login
 app.post('/api/auth/login', async (req, res) => {
-  const { email, password } = req.body;
+  const { email, contact, password } = req.body; // 👈 accept either field
+
+  // Pick whichever is provided
+  const identifier = email || contact;
+
+  if (!identifier || !password) {
+    return res.status(400).json({ error: 'Email/Contact and password are required' });
+  }
 
   try {
-    const { rows } = await db.query('SELECT * FROM users WHERE email = $1', [email]);
+    // 1️⃣ Fetch user by email OR contact_no
+    const { rows } = await db.query(
+      `SELECT * FROM users WHERE email = $1 OR contact_no = $1`,
+      [identifier]
+    );
 
     if (rows.length === 0) {
-      return res.status(401).json({ error: 'Email not found. Please register first.' });
+      return res.status(401).json({ error: 'No user found with this email/contact. Please register first.' });
     }
 
     const user = rows[0];
-    const validPassword = await bcrypt.compare(password, user.password_hash);
 
+    // 2️⃣ Check password
+    const validPassword = await bcrypt.compare(password, user.password_hash);
     if (!validPassword) {
       return res.status(401).json({ error: 'Incorrect password. Please try again.' });
     }
 
-    // Optional: track login time
+    // 3️⃣ Track login time
     await db.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
 
+    // 4️⃣ Generate JWT
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
+      { id: user.id, email: user.email, user_type: user.user_type },
       JWT_SECRET,
       { expiresIn: '2h' }
     );
@@ -157,10 +230,13 @@ app.post('/api/auth/login', async (req, res) => {
         id: user.id,
         name: user.name,
         email: user.email,
-        role: user.role
+        contact_no: user.contact_no,
+        user_type: user.user_type
       }
     });
+
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'Server error. Please try again later.' });
   }
 });
@@ -781,28 +857,285 @@ app.get('/api/profile', authenticateToken, async (req, res) => {
   }
 });
 
-app.put('/api/users/:email', async (req, res) => {
-  const email = req.params.email;
-  const { name, contact_no, role } = req.body;
+
+
+/* --------------------- UPDATE USER --------------------- */
+app.put('/api/auth/update/:id', async (req, res) => {
+  const { id } = req.params;
+  const {
+    password,
+    user_type,
+    // school student fields
+    first_name,
+    last_name,
+    date_of_birth,
+    gender,
+    school_name,
+    class_grade,
+    // college student fields
+    college_name,
+    course_degree,
+    year_of_study,
+    // passout student fields
+    degree_completed,
+    year_of_passing,
+    current_status,
+    // common address
+    city,
+    state,
+    pincode
+  } = req.body;
 
   try {
-    const { rowCount, rows } = await db.query(
-      `UPDATE users 
-       SET name = $1, contact_no = $2, role = COALESCE($3, role)
-       WHERE email = $4
-       RETURNING id, name, email, role, contact_no, created_at, last_login`,
-      [name, contact_no, role, email]
-    );
-
-    if (rowCount === 0) {
-      return res.status(404).json({ error: 'User not found' });
+    // 1️⃣ Update users table (only password + user_type)
+    let hashedPassword = null;
+    if (password) {
+      hashedPassword = await bcrypt.hash(password, 10);
     }
 
-    res.json(rows[0]);
+    const { rows } = await db.query(
+      `UPDATE users
+       SET password_hash = COALESCE($1, password_hash),
+           user_type = COALESCE($2, user_type),
+           last_login = NOW()
+       WHERE id = $3
+       RETURNING id, name, email, contact_no, user_type, created_at, last_login`,
+      [hashedPassword, user_type, id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // 2️⃣ Update respective detail table
+    if (user_type === "school") {
+      await db.query(
+        `UPDATE school_students
+         SET first_name = $1,
+             last_name = $2,
+             date_of_birth = $3,
+             gender = $4,
+             school_name = $5,
+             class_grade = $6,
+             city = $7,
+             state = $8,
+             pincode = $9
+         WHERE user_id = $10`,
+        [first_name, last_name, date_of_birth, gender, school_name, class_grade, city, state, pincode, id]
+      );
+    } else if (user_type === "college") {
+      await db.query(
+        `UPDATE college_students
+         SET first_name = $1,
+             last_name = $2,
+             date_of_birth = $3,
+             gender = $4,
+             college_name = $5,
+             course_degree = $6,
+             year_of_study = $7,
+             city = $8,
+             state = $9,
+             pincode = $10
+         WHERE user_id = $11`,
+        [first_name, last_name, date_of_birth, gender, college_name, course_degree, year_of_study, city, state, pincode, id]
+      );
+    } else if (user_type === "passout") {
+      await db.query(
+        `UPDATE passout_students
+         SET first_name = $1,
+             last_name = $2,
+             date_of_birth = $3,
+             gender = $4,
+             college_name = $5,
+             degree_completed = $6,
+             year_of_passing = $7,
+             current_status = $8,
+             city = $9,
+             state = $10,
+             pincode = $11
+         WHERE user_id = $12`,
+        [first_name, last_name, date_of_birth, gender, college_name, degree_completed, year_of_passing, current_status, city, state, pincode, id]
+      );
+    }
+
+    res.json({
+      message: "User updated successfully",
+      user: rows[0]
+    });
+
   } catch (err) {
+    console.error("Update error:", err);
     res.status(500).json({ error: err.message });
   }
 });
+
+/* --------------------- GET USER WITH ROLE DATA --------------------- */
+app.get('/api/users/:id', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // 1️⃣ Get base user info
+    const { rows: userRows } = await db.query(
+      `SELECT id, name, email, contact_no, user_type, created_at, last_login
+       FROM users WHERE id = $1`,
+      [id]
+    );
+
+    if (userRows.length === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const user = userRows[0];
+    let responseData = { ...user };
+
+    // 2️⃣ Get role-specific data
+    if (user.user_type === 'school') {
+      const { rows } = await db.query(
+        `SELECT first_name, last_name, date_of_birth, gender,
+                school_name, class_grade, city, state, pincode
+         FROM school_students WHERE user_id = $1`,
+        [id]
+      );
+      responseData.schoolData = rows[0] || null;
+    } 
+    else if (user.user_type === 'college') {
+      const { rows } = await db.query(
+        `SELECT first_name, last_name, date_of_birth, gender,
+                college_name, course_degree, year_of_study,
+                city, state, pincode
+         FROM college_students WHERE user_id = $1`,
+        [id]
+      );
+      responseData.collegeData = rows[0] || null;
+    } 
+    else if (user.user_type === 'passout') {
+      const { rows } = await db.query(
+        `SELECT first_name, last_name, date_of_birth, gender,
+                college_name, degree_completed, year_of_passing,
+                current_status, city, state, pincode
+         FROM passout_students WHERE user_id = $1`,
+        [id]
+      );
+      responseData.passoutData = rows[0] || null;
+    }
+
+    res.json(responseData);
+
+  } catch (error) {
+    console.error('Error fetching user data:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+
+
+
+/* --------------------- UNIVERSAL CONVERT ENDPOINT --------------------- */
+app.put('/api/auth/convert/:id', async (req, res) => {
+  const { id } = req.params;
+  const { to } = req.query; // target type: "college" | "passout"
+  const body = req.body;
+
+  try {
+    if (to === "college") {
+      // 1️⃣ Get school student
+      const { rows: schoolRows } = await db.query(
+        `SELECT first_name, last_name, date_of_birth, gender
+         FROM school_students WHERE user_id = $1`,
+        [id]
+      );
+      if (schoolRows.length === 0) {
+        return res.status(404).json({ error: "School student not found" });
+      }
+      const student = schoolRows[0];
+
+      // 2️⃣ Update user_type
+      await db.query(`UPDATE users SET user_type = 'college' WHERE id = $1`, [id]);
+
+      // 3️⃣ Delete from school_students
+      await db.query(`DELETE FROM school_students WHERE user_id = $1`, [id]);
+
+      // 4️⃣ Insert into college_students
+      await db.query(
+        `INSERT INTO college_students
+         (user_id, first_name, last_name, date_of_birth, gender,
+          college_name, course_degree, year_of_study, city, state, pincode)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+        [
+          id,
+          student.first_name,
+          student.last_name,
+          student.date_of_birth,
+          student.gender,
+          body.college_name,
+          body.course_degree,
+          body.year_of_study,
+          body.city,
+          body.state,
+          body.pincode
+        ]
+      );
+
+      return res.json({ message: "Converted from School → College", user_id: id });
+    }
+
+    else if (to === "passout") {
+      // 1️⃣ Get college student
+      const { rows: collegeRows } = await db.query(
+        `SELECT first_name, last_name, date_of_birth, gender, college_name
+         FROM college_students WHERE user_id = $1`,
+        [id]
+      );
+      if (collegeRows.length === 0) {
+        return res.status(404).json({ error: "College student not found" });
+      }
+      const student = collegeRows[0];
+
+      // 2️⃣ Update user_type
+      await db.query(`UPDATE users SET user_type = 'passout' WHERE id = $1`, [id]);
+
+      // 3️⃣ Delete from college_students
+      await db.query(`DELETE FROM college_students WHERE user_id = $1`, [id]);
+
+      // 4️⃣ Insert into passout_students
+      await db.query(
+        `INSERT INTO passout_students
+         (user_id, first_name, last_name, date_of_birth, gender,
+          college_name, degree_completed, year_of_passing, current_status,
+          city, state, pincode)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+        [
+          id,
+          student.first_name,
+          student.last_name,
+          student.date_of_birth,
+          student.gender,
+          student.college_name,
+          body.degree_completed,
+          body.year_of_passing,
+          body.current_status,
+          body.city,
+          body.state,
+          body.pincode
+        ]
+      );
+
+      return res.json({ message: "Converted from College → Passout", user_id: id });
+    }
+
+    else {
+      return res.status(400).json({ error: "Invalid conversion type. Use ?to=college or ?to=passout" });
+    }
+
+  } catch (err) {
+    console.error("Convert error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
+
 app.delete('/api/users/:email', authenticateToken, authorizeRole('admin'), async (req, res) => {
   const email = req.params.email;
 
@@ -3987,7 +4320,6 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
-
 
 
 
