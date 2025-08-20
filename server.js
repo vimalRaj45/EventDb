@@ -132,17 +132,7 @@ app.post('/api/auth/register', async (req, res) => {
 
   try {
     // ✅ Set default email if missing or empty
-    const normalizedEmail = ((email || '').trim().toLowerCase());
-
-    // 0️⃣ Check if email or contact number already exists
-    const existingUser = await db.query(
-      `SELECT id FROM users WHERE email = $1 OR contact_no = $2`,
-      [normalizedEmail, contact_no]
-    );
-
-    if (existingUser.rows.length > 0) {
-      return res.status(409).json({ error: 'Email or Contact number already exists' });
-    }
+    const normalizedEmail = ((email || '').trim().toLowerCase()) || 'N/A';
 
     // hash password
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -4335,6 +4325,7 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
 
 
 
