@@ -131,6 +131,9 @@ app.post('/api/auth/register', async (req, res) => {
   } = req.body;
 
   try {
+    // ✅ Set default email if missing or empty
+    const normalizedEmail = ((email || '').trim().toLowerCase()) || 'N/A';
+
     // hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -139,8 +142,9 @@ app.post('/api/auth/register', async (req, res) => {
       `INSERT INTO users (name, email, password_hash, contact_no, user_type)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING id, name, email, user_type, created_at`,
-      [name, email, hashedPassword, contact_no, user_type]
+      [name, normalizedEmail, hashedPassword, contact_no, user_type]
     );
+
 
     const userId = rows[0].id;
 
@@ -4320,6 +4324,7 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
 
 
 
