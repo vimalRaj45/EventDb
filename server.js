@@ -196,7 +196,6 @@ app.post('/api/auth/register', async (req, res) => {
 
 
 // /api/auth/login
-// /api/auth/login
 app.post('/api/auth/login', async (req, res) => {
   const { email, contact, password } = req.body; // 👈 accept either field
 
@@ -233,7 +232,7 @@ app.post('/api/auth/login', async (req, res) => {
     const token = jwt.sign(
       { id: user.id, email: user.email, user_type: user.user_type ,role: user.role },
       JWT_SECRET,
-      { expiresIn: '2h' }
+      { expiresIn: '30d' }
     );
 
     res.json({
@@ -4333,6 +4332,7 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
 
 
 
