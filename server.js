@@ -29,15 +29,6 @@ app.get('/ping', (req, res) => {
 
 
 
-// ✅ Extra Security: Block even direct access without CORS
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (!origin || !allowedOrigins.includes(origin)) {
-    return res.status(403).json({ message: '🚫 Forbidden: Invalid Origin' });
-  }
-  next();
-});
-
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
@@ -4441,6 +4432,7 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
 
 
 
