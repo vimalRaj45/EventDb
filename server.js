@@ -195,6 +195,132 @@ app.post('/api/auth/register', async (req, res) => {
 });
 
 
+/* --------------------- ADMIN - GET ALL USERS --------------------- */
+app.get('/api/admin/users', authenticateToken, authorizeRole('admin'), async (req, res) => {
+  try {
+    // Get all users with joins
+    const { rows } = await db.query(`
+      SELECT 
+        u.id AS user_id,
+        u.name AS username,
+        u.email,
+        u.contact_no,
+        u.user_type,
+        u.created_at,
+
+        -- School student fields
+        ss.first_name AS school_first_name,
+        ss.last_name AS school_last_name,
+        ss.date_of_birth AS school_dob,
+        ss.gender AS school_gender,
+        ss.school_name,
+        ss.class_grade,
+        ss.city AS school_city,
+        ss.state AS school_state,
+        ss.pincode AS school_pincode,
+
+        -- College student fields
+        cs.first_name AS college_first_name,
+        cs.last_name AS college_last_name,
+        cs.date_of_birth AS college_dob,
+        cs.gender AS college_gender,
+        cs.college_name AS college_college_name,
+        cs.course_degree,
+        cs.year_of_study,
+        cs.city AS college_city,
+        cs.state AS college_state,
+        cs.pincode AS college_pincode,
+
+        -- Passout student fields
+        ps.first_name AS passout_first_name,
+        ps.last_name AS passout_last_name,
+        ps.date_of_birth AS passout_dob,
+        ps.gender AS passout_gender,
+        ps.college_name AS passout_college_name,
+        ps.degree_completed,
+        ps.year_of_passing,
+        ps.current_status,
+        ps.city AS passout_city,
+        ps.state AS passout_state,
+        ps.pincode AS passout_pincode
+
+      FROM users u
+      LEFT JOIN school_students ss ON ss.user_id = u.id
+      LEFT JOIN college_students cs ON cs.user_id = u.id
+      LEFT JOIN passout_students ps ON ps.user_id = u.id
+      ORDER BY u.created_at DESC
+    `);
+
+    // Format response based on role
+    const formatted = rows.map(u => {
+      if (u.user_type === "school") {
+        return {
+          id: u.user_id,
+          name: u.username,
+          email: u.email,
+          contact_no: u.contact_no,
+          user_type: u.user_type,
+          created_at: u.created_at,
+          details: {
+            date_of_birth: u.school_dob,
+            gender: u.school_gender,
+            school_name: u.school_name,
+            class_grade: u.class_grade,
+            city: u.school_city,
+            state: u.school_state,
+            pincode: u.school_pincode
+          }
+        };
+      } else if (u.user_type === "college") {
+        return {
+          id: u.user_id,
+          name: u.username,
+          email: u.email,
+          contact_no: u.contact_no,
+          user_type: u.user_type,
+          created_at: u.created_at,
+          details: {
+            date_of_birth: u.college_dob,
+            gender: u.college_gender,
+            college_name: u.college_college_name,
+            course_degree: u.course_degree,
+            year_of_study: u.year_of_study,
+            city: u.college_city,
+            state: u.college_state,
+            pincode: u.college_pincode
+          }
+        };
+      } else if (u.user_type === "passout") {
+        return {
+          id: u.user_id,
+          name: u.username,
+          email: u.email,
+          contact_no: u.contact_no,
+          user_type: u.user_type,
+          created_at: u.created_at,
+          details: {
+            date_of_birth: u.passout_dob,
+            gender: u.passout_gender,
+            college_name: u.passout_college_name,
+            degree_completed: u.degree_completed,
+            year_of_passing: u.year_of_passing,
+            current_status: u.current_status,
+            city: u.passout_city,
+            state: u.passout_state,
+            pincode: u.passout_pincode
+          }
+        };
+      }
+    });
+
+    res.status(200).json({ users: formatted });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 // /api/auth/login
 app.post('/api/auth/login', async (req, res) => {
   const { email, contact, password } = req.body; // 👈 accept either field
@@ -4332,6 +4458,7 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
 
 
 
