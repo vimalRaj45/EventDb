@@ -195,10 +195,11 @@ app.post('/api/auth/register', async (req, res) => {
 });
 
 
-/* --------------------- ADMIN - GET ALL USERS --------------------- */
-app.get('/api/admin/users', authenticateToken, authorizeRole('admin'), async (req, res) => {
+/* --------------------- ADMIN - GET SINGLE USER BY ID --------------------- */
+app.get('/api/admin/users/:id', async (req, res) => {
+  const { id } = req.params;
+
   try {
-    // Get all users with joins
     const { rows } = await db.query(`
       SELECT 
         u.id AS user_id,
@@ -248,78 +249,110 @@ app.get('/api/admin/users', authenticateToken, authorizeRole('admin'), async (re
       LEFT JOIN school_students ss ON ss.user_id = u.id
       LEFT JOIN college_students cs ON cs.user_id = u.id
       LEFT JOIN passout_students ps ON ps.user_id = u.id
+      WHERE u.id = $1
       ORDER BY u.created_at DESC
-    `);
+    `, [id]);
 
-    // Format response based on role
-    const formatted = rows.map(u => {
-      if (u.user_type === "school") {
-        return {
-          id: u.user_id,
-          name: u.username,
-          email: u.email,
-          contact_no: u.contact_no,
-          user_type: u.user_type,
-          created_at: u.created_at,
-          details: {
-            date_of_birth: u.school_dob,
-            gender: u.school_gender,
-            school_name: u.school_name,
-            class_grade: u.class_grade,
-            city: u.school_city,
-            state: u.school_state,
-            pincode: u.school_pincode
-          }
-        };
-      } else if (u.user_type === "college") {
-        return {
-          id: u.user_id,
-          name: u.username,
-          email: u.email,
-          contact_no: u.contact_no,
-          user_type: u.user_type,
-          created_at: u.created_at,
-          details: {
-            date_of_birth: u.college_dob,
-            gender: u.college_gender,
-            college_name: u.college_college_name,
-            course_degree: u.course_degree,
-            year_of_study: u.year_of_study,
-            city: u.college_city,
-            state: u.college_state,
-            pincode: u.college_pincode
-          }
-        };
-      } else if (u.user_type === "passout") {
-        return {
-          id: u.user_id,
-          name: u.username,
-          email: u.email,
-          contact_no: u.contact_no,
-          user_type: u.user_type,
-          created_at: u.created_at,
-          details: {
-            date_of_birth: u.passout_dob,
-            gender: u.passout_gender,
-            college_name: u.passout_college_name,
-            degree_completed: u.degree_completed,
-            year_of_passing: u.year_of_passing,
-            current_status: u.current_status,
-            city: u.passout_city,
-            state: u.passout_state,
-            pincode: u.passout_pincode
-          }
-        };
-      }
-    });
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
 
-    res.status(200).json({ users: formatted });
+    const u = rows[0];
+
+    let userDetails;
+
+    if (u.user_type === "school") {
+      userDetails = {
+        id: u.user_id,
+        name: u.username,
+        email: u.email,
+        contact_no: u.contact_no,
+        user_type: u.user_type,
+        created_at: u.created_at,
+        details: {
+          date_of_birth: u.school_dob,
+          gender: u.school_gender,
+          school_name: u.school_name,
+          class_grade: u.class_grade,
+          city: u.school_city,
+          state: u.school_state,
+          pincode: u.school_pincode
+        }
+      };
+    } else if (u.user_type === "college") {
+      userDetails = {
+        id: u.user_id,
+        name: u.username,
+        email: u.email,
+        contact_no: u.contact_no,
+        user_type: u.user_type,
+        created_at: u.created_at,
+        details: {
+          date_of_birth: u.college_dob,
+          gender: u.college_gender,
+          college_name: u.college_college_name,
+          course_degree: u.course_degree,
+          year_of_study: u.year_of_study,
+          city: u.college_city,
+          state: u.college_state,
+          pincode: u.college_pincode
+        }
+      };
+    } else if (u.user_type === "passout") {
+      userDetails = {
+        id: u.user_id,
+        name: u.username,
+        email: u.email,
+        contact_no: u.contact_no,
+        user_type: u.user_type,
+        created_at: u.created_at,
+        details: {
+          date_of_birth: u.passout_dob,
+          gender: u.passout_gender,
+          college_name: u.passout_college_name,
+          degree_completed: u.degree_completed,
+          year_of_passing: u.year_of_passing,
+          current_status: u.current_status,
+          city: u.passout_city,
+          state: u.passout_state,
+          pincode: u.passout_pincode
+        }
+      };
+    } else {
+      return res.status(400).json({ success: false, message: 'Invalid user type' });
+    }
+
+    // Also fetch participations and organized events
+    const [participations, organizedEvents] = await Promise.all([
+      db.query(`
+        SELECT 
+          e.title AS event_title,
+          p.status,
+          p.result
+        FROM participations p
+        JOIN events e ON e.id = p.event_id
+        WHERE p.user_id = $1
+      `, [id]),
+      db.query(`
+        SELECT 
+          e.title,
+          e.type,
+          e.id AS event_id
+        FROM events e
+        WHERE e.organizer_id = $1
+      `, [id])
+    ]);
+
+    // Add extra data
+    userDetails.participations = participations.rows;
+    userDetails.organized_events = organizedEvents.rows;
+
+    res.status(200).json({ success: true, data: userDetails });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ success: false, error: err.message });
   }
 });
-
 
 // /api/auth/login
 app.post('/api/auth/login', async (req, res) => {
@@ -4458,6 +4491,7 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
 
 
 
