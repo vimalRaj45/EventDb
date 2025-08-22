@@ -195,11 +195,12 @@ app.post('/api/auth/register', async (req, res) => {
 });
 
 
-/* --------------------- ADMIN - GET SINGLE USER BY ID --------------------- */
+/* --------------------- ADMIN - GET USER BY ID --------------------- */
 app.get('/api/admin/users/:id', async (req, res) => {
-  const { id } = req.params;
+  const userId = req.params.id;
 
   try {
+    // Get one user with joins
     const { rows } = await db.query(`
       SELECT 
         u.id AS user_id,
@@ -250,19 +251,18 @@ app.get('/api/admin/users/:id', async (req, res) => {
       LEFT JOIN college_students cs ON cs.user_id = u.id
       LEFT JOIN passout_students ps ON ps.user_id = u.id
       WHERE u.id = $1
-      ORDER BY u.created_at DESC
-    `, [id]);
+    `, [userId]);
 
     if (rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'User not found' });
+      return res.status(404).json({ error: "User not found" });
     }
 
+    // Format response based on role
     const u = rows[0];
-
-    let userDetails;
+    let formatted;
 
     if (u.user_type === "school") {
-      userDetails = {
+      formatted = {
         id: u.user_id,
         name: u.username,
         email: u.email,
@@ -280,7 +280,7 @@ app.get('/api/admin/users/:id', async (req, res) => {
         }
       };
     } else if (u.user_type === "college") {
-      userDetails = {
+      formatted = {
         id: u.user_id,
         name: u.username,
         email: u.email,
@@ -299,7 +299,7 @@ app.get('/api/admin/users/:id', async (req, res) => {
         }
       };
     } else if (u.user_type === "passout") {
-      userDetails = {
+      formatted = {
         id: u.user_id,
         name: u.username,
         email: u.email,
@@ -318,41 +318,15 @@ app.get('/api/admin/users/:id', async (req, res) => {
           pincode: u.passout_pincode
         }
       };
-    } else {
-      return res.status(400).json({ success: false, message: 'Invalid user type' });
     }
 
-    // Also fetch participations and organized events
-    const [participations, organizedEvents] = await Promise.all([
-      db.query(`
-        SELECT 
-          e.title AS event_title,
-          p.status,
-          p.result
-        FROM participations p
-        JOIN events e ON e.id = p.event_id
-        WHERE p.user_id = $1
-      `, [id]),
-      db.query(`
-        SELECT 
-          e.title,
-          e.type,
-          e.id AS event_id
-        FROM events e
-        WHERE e.organizer_id = $1
-      `, [id])
-    ]);
-
-    // Add extra data
-    userDetails.participations = participations.rows;
-    userDetails.organized_events = organizedEvents.rows;
-
-    res.status(200).json({ success: true, data: userDetails });
+    res.status(200).json({ user: formatted });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ error: err.message });
   }
 });
+
 
 // /api/auth/login
 app.post('/api/auth/login', async (req, res) => {
@@ -4491,6 +4465,7 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
 
 
 
