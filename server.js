@@ -2216,80 +2216,44 @@ async function uploadImageWithFallback(file) {
 }
 
 
-// 📝 Enhanced Register Student (Pending) with Referral Validation and imgBB fallback
-app.post('/students', upload.fields([
-  { name: 'clg_id_photo' },
-  { name: 'photo' },
-  { name: 'signature_photo' }
-]), async (req, res) => {
+app.post('/students', async (req, res) => {
   try {
-    const {
-      first_name, last_name, gender, contact_number, whatsapp_number,
-      email, college_name, study_year, district,
-      payment_method, payment_number, target = 0, attained = 0,
-      referrer_code, assigned_by = 'admin'
-    } = req.body;
+    const { userid, payment_method } = req.body;
 
-    // Validate referrer code if provided
-    if (referrer_code) {
-      const referrerExists = await db.query(
-        'SELECT id FROM students WHERE referral_code = $1 AND status = $2',
-        [referrer_code, 'approved']
-      );
-      if (referrerExists.rows.length === 0) {
-        return res.status(400).json({ error: 'Invalid or inactive referral code' });
-      }
+    if (!userid || !payment_method) {
+      return res.status(400).json({ error: 'userid and payment_method are required' });
     }
 
+    // Check if student already exists
     const check = await db.query(
-      `SELECT id FROM students WHERE contact_number = $1 OR email = $2`,
-      [contact_number, email]
+      'SELECT id FROM students WHERE userid = $1',
+      [userid]
     );
-    if (check.rows.length > 0) return res.status(409).json({ error: 'Student already exists.' });
-
-    // Upload images with fallback
-    let clg_id_photo_url, photo_url, signature_photo_url;
-    
-    try {
-      [clg_id_photo_url, photo_url, signature_photo_url] = await Promise.all([
-        req.files?.clg_id_photo ? uploadImageWithFallback(req.files.clg_id_photo[0]) : null,
-        req.files?.photo ? uploadImageWithFallback(req.files.photo[0]) : null,
-        req.files?.signature_photo ? uploadImageWithFallback(req.files.signature_photo[0]) : null
-      ]);
-    } catch (uploadError) {
-      console.error('Image upload failed:', uploadError);
-      return res.status(500).json({ error: 'Failed to upload one or more images' });
+    if (check.rows.length > 0) {
+      return res.status(409).json({ error: 'Student already exists.' });
     }
 
+    // Insert student with only userid and payment_method
     const insertQuery = `
-      INSERT INTO students (
-        first_name, last_name, gender, contact_number, whatsapp_number,
-        email, college_name, study_year, district, referral_code,
-        payment_method, payment_number, clg_id_photo_url, photo_url,
-        signature_photo_url, target, attained, status,
-        is_mentor, role, referrer_code, assigned_by
-      ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, NULL,
-        $10, $11, $12, $13, $14, $15, $16, 'pending',
-        false, 'student', $17, $18
-      ) RETURNING id
+      INSERT INTO students (userid, payment_method, status)
+      VALUES ($1, $2, 'pending')
+      RETURNING id
     `;
-
-    const values = [
-      first_name, last_name, gender, contact_number, whatsapp_number,
-      email, college_name, study_year, district,
-      payment_method, payment_number, clg_id_photo_url, photo_url,
-      signature_photo_url, target, attained,
-      referrer_code, assigned_by
-    ];
+    const values = [userid, payment_method];
 
     const result = await db.query(insertQuery, values);
-    res.json({ message: 'Student registered successfully. Awaiting approval.', id: result.rows[0].id });
+
+    // Send success response
+    res.status(200).json({
+      message: 'Student registered successfully. Awaiting approval.',
+      id: result.rows[0].id
+    });
   } catch (error) {
     console.error('Registration error:', error);
     res.status(500).json({ error: error.message });
   }
 });
+
 // ✅ Enhanced Admin Approves Student with Referral Tracking
 app.put('/students/approve/:id', async (req, res) => {
   try {
@@ -4465,6 +4429,7 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
 
 
 
