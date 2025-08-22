@@ -2110,16 +2110,34 @@ function generateReferralCode() {
 
 
 
-// 🔐 Student Login
+// 🔐 Student Login by userid
 app.post('/stdlogin', async (req, res) => {
   try {
-    const { contact_number, email } = req.body;
-    const query = `SELECT * FROM students WHERE contact_number = $1 AND email = $2`;
-    const result = await db.query(query, [contact_number, email]);
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Student not found' });
-    res.json(result.rows[0]);
+    const { userid } = req.body;
+    if (!userid) return res.status(400).json({ error: 'userid is required' });
+
+    const query = `SELECT * FROM students WHERE userid = $1`;
+    const result = await db.query(query, [userid]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    const student = result.rows[0];
+
+    // Check approval status
+    if (student.status !== 'approved') {
+      return res.status(403).json({ 
+        error: 'Account not approved. Please contact admin.' 
+      });
+    }
+
+    // Return user without password
+    const { password, ...userWithoutPassword } = student;
+    res.json(userWithoutPassword);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -4429,6 +4447,7 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
 
 
 
