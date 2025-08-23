@@ -229,7 +229,7 @@ await client.query(
 });
 
 
-/* --------------------- UPDATE STUDENT PAYMENT --------------------- */
+/* --------------------- UPDATE STUDENT PAYMENT (Only Once) --------------------- */
 app.put('/api/studentsupdate/:userid', async (req, res) => {
   const client = await db.connect();
 
@@ -237,6 +237,26 @@ app.put('/api/studentsupdate/:userid', async (req, res) => {
   const { payment_method, payment_number, referrer_code } = req.body;
 
   try {
+    // 1️⃣ Check if student already has payment details
+    const check = await client.query(
+      `SELECT payment_method, payment_number, referrer_code
+       FROM students
+       WHERE userid = $1`,
+      [userid]
+    );
+
+    if (check.rows.length === 0) {
+      return res.status(404).json({ error: "Student not found" });
+    }
+
+    const student = check.rows[0];
+
+    // If already filled, don't allow update
+    if (student.payment_method || student.payment_number || student.referrer_code) {
+      return res.status(400).json({ error: "Payment details already submitted. Cannot update again." });
+    }
+
+    // 2️⃣ Update payment details first time only
     const { rowCount } = await client.query(
       `UPDATE students
        SET payment_method = $1,
@@ -250,7 +270,8 @@ app.put('/api/studentsupdate/:userid', async (req, res) => {
       return res.status(404).json({ error: "Student not found" });
     }
 
-    res.json({ message: "Student updated successfully" });
+    res.json({ message: "✅ Payment details added successfully" });
+
   } catch (err) {
     console.error("❌ Update failed:", err);
     res.status(500).json({ error: err.message });
@@ -4514,6 +4535,7 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
 
 
 
