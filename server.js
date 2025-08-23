@@ -103,12 +103,15 @@ const authorizeRole = (role) => {
 
 /* --------------------- AUTHENTICATION --------------------- */
 app.post('/api/auth/register', async (req, res) => {
+  const client = await db.connect(); // manual transaction
+
   const {
     name,
     email,
     password,
     contact_no,
     user_type,  // "school" | "college" | "passout"
+
     // school student fields
     first_name,
     last_name,
@@ -116,14 +119,17 @@ app.post('/api/auth/register', async (req, res) => {
     gender,
     school_name,
     class_grade,
+
     // college student fields
     college_name,
     course_degree,
     year_of_study,
+
     // passout student fields
     degree_completed,
     year_of_passing,
     current_status,
+
     // common address
     city,
     state,
@@ -131,54 +137,79 @@ app.post('/api/auth/register', async (req, res) => {
   } = req.body;
 
   try {
-    // ✅ Set default email if missing or empty
+    await client.query("BEGIN"); // start transaction
+
     const normalizedEmail = ((email || '').trim().toLowerCase()) || 'N/A';
-     // 0️⃣ Check if email or contact number already exists
-    const existingUser = await db.query(
+
+    // 0️⃣ Check if email/contact already exists
+    const existingUser = await client.query(
       `SELECT id FROM users WHERE email = $1 OR contact_no = $2`,
-      [email, contact_no]
+      [normalizedEmail, contact_no]
     );
 
     if (existingUser.rows.length > 0) {
+      await client.query("ROLLBACK");
       return res.status(409).json({ error: 'Email or Contact number already exists' });
     }
+
     // hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // 1️⃣ Insert into users
-    const { rows } = await db.query(
+    const { rows } = await client.query(
       `INSERT INTO users (name, email, password_hash, contact_no, user_type)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING id, name, email, user_type, created_at`,
       [name, normalizedEmail, hashedPassword, contact_no, user_type]
     );
 
-
     const userId = rows[0].id;
 
     // 2️⃣ Insert into respective detail table
     if (user_type === "school") {
-      await db.query(
-        `INSERT INTO school_students 
+      await client.query(
+        `INSERT INTO school_students
           (user_id, first_name, last_name, date_of_birth, gender, school_name, class_grade, city, state, pincode)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
         [userId, first_name, last_name, date_of_birth, gender, school_name, class_grade, city, state, pincode]
       );
     } else if (user_type === "college") {
-      await db.query(
-        `INSERT INTO college_students 
+      await client.query(
+        `INSERT INTO college_students
           (user_id, first_name, last_name, date_of_birth, gender, college_name, course_degree, year_of_study, city, state, pincode)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
         [userId, first_name, last_name, date_of_birth, gender, college_name, course_degree, year_of_study, city, state, pincode]
       );
     } else if (user_type === "passout") {
-      await db.query(
-        `INSERT INTO passout_students 
+      await client.query(
+        `INSERT INTO passout_students
           (user_id, first_name, last_name, date_of_birth, gender, college_name, degree_completed, year_of_passing, current_status, city, state, pincode)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
         [userId, first_name, last_name, date_of_birth, gender, college_name, degree_completed, year_of_passing, current_status, city, state, pincode]
       );
     }
+
+  // 3️⃣ Insert into public.students (🚫 only using the same fields)
+await client.query(
+  `INSERT INTO students 
+    (first_name, last_name, gender, contact_number, email, college_name, study_year, district, userid, status)
+   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+  [
+    first_name,
+    last_name,
+    gender,
+    contact_no,
+    normalizedEmail,
+    college_name,
+    year_of_study,   // maps to study_year
+    city,            // use city as district
+    String(userId),  // store userId as string
+    'pending'        // default status
+  ]
+);
+
+
+    await client.query("COMMIT"); // ✅ all good
 
     res.status(201).json({
       message: "User registered successfully",
@@ -186,13 +217,17 @@ app.post('/api/auth/register', async (req, res) => {
     });
 
   } catch (err) {
+    await client.query("ROLLBACK");
     if (err.code === '23505') {
-      return res.status(409).json({ error: 'Email already exists' });
+      return res.status(409).json({ error: 'Duplicate value (email, referral_code, or userid already exists)' });
     }
     console.error(err);
     res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
   }
 });
+
 
 
 /* --------------------- ADMIN - GET USER BY ID --------------------- */
@@ -4447,6 +4482,7 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
 
 
 
