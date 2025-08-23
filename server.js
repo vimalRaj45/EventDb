@@ -195,8 +195,8 @@ await client.query(
     (first_name, last_name, gender, contact_number, email, college_name, study_year, district, userid, status)
    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
   [
-    first_name,
-    last_name,
+    name,
+    name,
     gender,
     contact_no,
     normalizedEmail,
@@ -4482,6 +4482,7 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
 
 
 
