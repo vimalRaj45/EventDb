@@ -229,6 +229,38 @@ await client.query(
 });
 
 
+/* --------------------- UPDATE STUDENT PAYMENT --------------------- */
+app.put('/api/studentsupdate/:userid', async (req, res) => {
+  const client = await db.connect();
+
+  const { userid } = req.params;
+  const { payment_method, payment_number, referrer_code } = req.body;
+
+  try {
+    const { rowCount } = await client.query(
+      `UPDATE students
+       SET payment_method = $1,
+           payment_number = $2,
+           referrer_code = $3
+       WHERE userid = $4`,
+      [payment_method, payment_number, referrer_code, userid]
+    );
+
+    if (rowCount === 0) {
+      return res.status(404).json({ error: "Student not found" });
+    }
+
+    res.json({ message: "Student updated successfully" });
+  } catch (err) {
+    console.error("❌ Update failed:", err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+
+
 
 /* --------------------- ADMIN - GET USER BY ID --------------------- */
 app.get('/api/admin/users/:id', async (req, res) => {
@@ -4482,6 +4514,7 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
 
 
 
