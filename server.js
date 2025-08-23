@@ -237,42 +237,52 @@ app.put('/api/studentsupdate/:userid', async (req, res) => {
   const { payment_method, payment_number, referrer_code } = req.body;
 
   try {
-    // 1️⃣ Check if student already has payment details
+    await client.query("BEGIN"); // start transaction
+
+    // 1️⃣ Ensure userid is string for VARCHAR match
+    const userIdStr = String(userid);
+
+    // 2️⃣ Check if student exists
     const check = await client.query(
       `SELECT payment_method, payment_number, referrer_code
        FROM students
        WHERE userid = $1`,
-      [userid]
+      [userIdStr]
     );
 
     if (check.rows.length === 0) {
+      await client.query("ROLLBACK");
       return res.status(404).json({ error: "Student not found" });
     }
 
     const student = check.rows[0];
 
-    // If already filled, don't allow update
+    // 3️⃣ Prevent update if payment details already exist
     if (student.payment_method || student.payment_number || student.referrer_code) {
+      await client.query("ROLLBACK");
       return res.status(400).json({ error: "Payment details already submitted. Cannot update again." });
     }
 
-    // 2️⃣ Update payment details first time only
+    // 4️⃣ Update payment details (first-time only)
     const { rowCount } = await client.query(
       `UPDATE students
        SET payment_method = $1,
            payment_number = $2,
            referrer_code = $3
        WHERE userid = $4`,
-      [payment_method, payment_number, referrer_code, userid]
+      [payment_method, payment_number, referrer_code, userIdStr]
     );
 
     if (rowCount === 0) {
+      await client.query("ROLLBACK");
       return res.status(404).json({ error: "Student not found" });
     }
 
+    await client.query("COMMIT"); // ✅ commit transaction
     res.json({ message: "✅ Payment details added successfully" });
 
   } catch (err) {
+    await client.query("ROLLBACK"); // rollback if any error
     console.error("❌ Update failed:", err);
     res.status(500).json({ error: err.message });
   } finally {
@@ -4535,6 +4545,7 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
 
 
 
