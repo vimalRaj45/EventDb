@@ -2392,7 +2392,6 @@ function generateReferralCode() {
 
 
 
-// 🔐 Student Login by userid
 app.post('/stdlogin', async (req, res) => {
   try {
     const { userid } = req.body;
@@ -2410,15 +2409,15 @@ app.post('/stdlogin', async (req, res) => {
 
     const student = result.rows[0];
 
+    // Pending and no payment
     if (student.status === 'pending' && !student.payment_method) {
-      // Approved but payment missing
       return res.status(403).json({ 
         error: 'Your account is not registered for referral.' 
       });
     }
 
+    // Approved and payment exists
     if (student.status === 'approved' && student.payment_method) {
-      // Approved and payment exists
       return res.status(200).json(student);
     }
 
@@ -2432,6 +2431,7 @@ app.post('/stdlogin', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
 
 
 // 📝 Enhanced Register Student (Pending) with Referral Validation
@@ -4740,6 +4740,7 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
 
 
 
