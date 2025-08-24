@@ -2402,26 +2402,37 @@ app.post('/stdlogin', async (req, res) => {
     const result = await db.query(query, [userid]);
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Student not found' });
+      // User not found
+      return res.status(404).json({ 
+        error: 'User ID not yet registered for referral.' 
+      });
     }
 
     const student = result.rows[0];
 
-    // Check approval status
-    if (student.status !== 'approved') {
+    if (student.status === 'approved' && !student.payment_method) {
+      // Approved but payment missing
       return res.status(403).json({ 
-        error: 'Account not approved. Please contact admin.' 
+        error: 'Your account is not registered for referral.' 
       });
     }
 
-    // Return user without password
-    const { password, ...userWithoutPassword } = student;
-    res.json(userWithoutPassword);
+    if (student.status === 'approved' && student.payment_method) {
+      // Approved and payment exists
+      return res.status(200).json(student);
+    }
+
+    // Any other case (not approved)
+    return res.status(403).json({ 
+      error: 'Please wait for admin approval.' 
+    });
+
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
 
 // 📝 Enhanced Register Student (Pending) with Referral Validation
 
@@ -4729,6 +4740,7 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
 
 
 
