@@ -1107,8 +1107,6 @@ app.put('/api/auth/update/:id', async (req, res) => {
   const {
     password,
     user_type,
-    first_name,
-    last_name,
     date_of_birth,
     gender,
     school_name,
@@ -1124,7 +1122,7 @@ app.put('/api/auth/update/:id', async (req, res) => {
     pincode
   } = req.body;
 
-  // 🔹 Normalize user_type
+  // Normalize user_type
   const userType = (user_type || '').toLowerCase().trim();
 
   const client = await db.connect();
@@ -1137,16 +1135,11 @@ app.put('/api/auth/update/:id', async (req, res) => {
     console.log("👤 Normalized user_type:", userType || '(not provided)');
 
     await client.query("BEGIN");
-    console.log("✅ Transaction BEGIN successful.");
 
     // 1️⃣ Update users table
     let hashedPassword = null;
     if (password) {
-      console.log("🔑 Password provided. Hashing...");
       hashedPassword = await bcrypt.hash(password, 10);
-      console.log("✅ Password hashed successfully.");
-    } else {
-      console.log("⚠️ No password provided. Skipping password update.");
     }
 
     const userUpdateQuery = `
@@ -1165,53 +1158,28 @@ app.put('/api/auth/update/:id', async (req, res) => {
     ]);
 
     if (userResult.rows.length === 0) {
-      console.warn("❌ [ERROR] User not found in 'users' table:", id);
       await client.query("ROLLBACK");
       return res.status(404).json({ error: "User not found in system." });
     }
 
     const user = userResult.rows[0];
-    console.log("✅ 'users' table updated successfully:", {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      contact_no: user.contact_no,
-      user_type: user.db_user_type,
-      last_login: user.last_login
-    });
 
-    // Helper for safe fallback values
-    const safe = (val, existingVal, defaultVal) => val ?? existingVal ?? defaultVal ?? null;
+    // Split full name into first and last name
+    const [firstNameFromUser, ...rest] = (user.name || "Unknown").split(" ");
+    const lastNameFromUser = rest.join(" ") || firstNameFromUser;
 
-    // 2️⃣ UPSERT into role-specific detail table
+    // Helper for fallback values
+    const safe = (val, defaultVal) => val ?? defaultVal ?? null;
+
+    // 2️⃣ Role-specific table UPSERT
     if (userType === "school") {
-      console.log("🏫 [SCHOOL] Preparing to upsert into 'school_students'...");
-
-      const existingSchoolRes = await client.query("SELECT * FROM school_students WHERE user_id=$1", [id]);
-      const existingSchool = existingSchoolRes.rows[0] || {};
-
-      const schoolValues = [
-        id,
-        safe(first_name, existingSchool.first_name, user.name),
-        safe(last_name, existingSchool.last_name, user.name),
-        safe(date_of_birth, existingSchool.date_of_birth, '1900-01-01'),
-        safe(gender, existingSchool.gender, 'Not Specified'),
-        safe(school_name, existingSchool.school_name, 'Unknown School'),
-        safe(class_grade, existingSchool.class_grade, '1'),
-        safe(city, existingSchool.city, 'Unknown City'),
-        safe(state, existingSchool.state, 'Unknown State'),
-        safe(pincode, existingSchool.pincode, '000000')
-      ];
-
-      console.log("📎 school_students values:", schoolValues);
-
       await client.query(
         `INSERT INTO school_students
           (user_id, first_name, last_name, date_of_birth, gender, school_name, class_grade, city, state, pincode)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
          ON CONFLICT (user_id) DO UPDATE SET
-           first_name = COALESCE(EXCLUDED.first_name, school_students.first_name),
-           last_name = COALESCE(EXCLUDED.last_name, school_students.last_name),
+           first_name = EXCLUDED.first_name,
+           last_name = EXCLUDED.last_name,
            date_of_birth = COALESCE(EXCLUDED.date_of_birth, school_students.date_of_birth),
            gender = COALESCE(EXCLUDED.gender, school_students.gender),
            school_name = COALESCE(EXCLUDED.school_name, school_students.school_name),
@@ -1219,40 +1187,28 @@ app.put('/api/auth/update/:id', async (req, res) => {
            city = COALESCE(EXCLUDED.city, school_students.city),
            state = COALESCE(EXCLUDED.state, school_students.state),
            pincode = COALESCE(EXCLUDED.pincode, school_students.pincode)`,
-        schoolValues
+        [
+          id,
+          firstNameFromUser,
+          lastNameFromUser,
+          safe(date_of_birth, '1900-01-01'),
+          safe(gender, 'Not Specified'),
+          safe(school_name, 'Unknown School'),
+          safe(class_grade, '1'),
+          safe(city, 'Unknown City'),
+          safe(state, 'Unknown State'),
+          safe(pincode, '000000')
+        ]
       );
 
-      console.log("✅ 'school_students' upserted successfully.");
-
     } else if (userType === "college") {
-      console.log("🎓 [COLLEGE] Preparing to upsert into 'college_students'...");
-
-      const existingCollegeRes = await client.query("SELECT * FROM college_students WHERE user_id=$1", [id]);
-      const existingCollege = existingCollegeRes.rows[0] || {};
-
-      const collegeValues = [
-        id,
-        safe(first_name, existingCollege.first_name, user.name),
-        safe(last_name, existingCollege.last_name, user.name),
-        safe(date_of_birth, existingCollege.date_of_birth, '1900-01-01'),
-        safe(gender, existingCollege.gender, 'Not Specified'),
-        safe(college_name, existingCollege.college_name, 'Unknown College'),
-        safe(course_degree, existingCollege.course_degree, 'Unknown Course'),
-        safe(year_of_study, existingCollege.year_of_study, 1),
-        safe(city, existingCollege.city, 'Unknown City'),
-        safe(state, existingCollege.state, 'Unknown State'),
-        safe(pincode, existingCollege.pincode, '000000')
-      ];
-
-      console.log("📎 college_students values:", collegeValues);
-
       await client.query(
         `INSERT INTO college_students
            (user_id, first_name, last_name, date_of_birth, gender, college_name, course_degree, year_of_study, city, state, pincode)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
          ON CONFLICT (user_id) DO UPDATE SET
-           first_name = COALESCE(EXCLUDED.first_name, college_students.first_name),
-           last_name = COALESCE(EXCLUDED.last_name, college_students.last_name),
+           first_name = EXCLUDED.first_name,
+           last_name = EXCLUDED.last_name,
            date_of_birth = COALESCE(EXCLUDED.date_of_birth, college_students.date_of_birth),
            gender = COALESCE(EXCLUDED.gender, college_students.gender),
            college_name = COALESCE(EXCLUDED.college_name, college_students.college_name),
@@ -1261,41 +1217,29 @@ app.put('/api/auth/update/:id', async (req, res) => {
            city = COALESCE(EXCLUDED.city, college_students.city),
            state = COALESCE(EXCLUDED.state, college_students.state),
            pincode = COALESCE(EXCLUDED.pincode, college_students.pincode)`,
-        collegeValues
+        [
+          id,
+          firstNameFromUser,
+          lastNameFromUser,
+          safe(date_of_birth, '1900-01-01'),
+          safe(gender, 'Not Specified'),
+          safe(college_name, 'Unknown College'),
+          safe(course_degree, 'Unknown Course'),
+          safe(year_of_study, 1),
+          safe(city, 'Unknown City'),
+          safe(state, 'Unknown State'),
+          safe(pincode, '000000')
+        ]
       );
 
-      console.log("✅ 'college_students' upserted successfully.");
-
     } else if (userType === "passout") {
-      console.log("📜 [PASSOUT] Preparing to upsert into 'passout_students'...");
-
-      const existingPassoutRes = await client.query("SELECT * FROM passout_students WHERE user_id=$1", [id]);
-      const existingPassout = existingPassoutRes.rows[0] || {};
-
-      const passoutValues = [
-        id,
-        safe(first_name, existingPassout.first_name, user.name),
-        safe(last_name, existingPassout.last_name, user.name),
-        safe(date_of_birth, existingPassout.date_of_birth, '1900-01-01'),
-        safe(gender, existingPassout.gender, 'Not Specified'),
-        safe(college_name, existingPassout.college_name, 'Unknown College'),
-        safe(degree_completed, existingPassout.degree_completed, 'Unknown Degree'),
-        safe(year_of_passing, existingPassout.year_of_passing, 2000),
-        safe(current_status, existingPassout.current_status, 'Unknown'),
-        safe(city, existingPassout.city, 'Unknown City'),
-        safe(state, existingPassout.state, 'Unknown State'),
-        safe(pincode, existingPassout.pincode, '000000')
-      ];
-
-      console.log("📎 passout_students values:", passoutValues);
-
       await client.query(
         `INSERT INTO passout_students
            (user_id, first_name, last_name, date_of_birth, gender, college_name, degree_completed, year_of_passing, current_status, city, state, pincode)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
          ON CONFLICT (user_id) DO UPDATE SET
-           first_name = COALESCE(EXCLUDED.first_name, passout_students.first_name),
-           last_name = COALESCE(EXCLUDED.last_name, passout_students.last_name),
+           first_name = EXCLUDED.first_name,
+           last_name = EXCLUDED.last_name,
            date_of_birth = COALESCE(EXCLUDED.date_of_birth, passout_students.date_of_birth),
            gender = COALESCE(EXCLUDED.gender, passout_students.gender),
            college_name = COALESCE(EXCLUDED.college_name, passout_students.college_name),
@@ -1305,44 +1249,31 @@ app.put('/api/auth/update/:id', async (req, res) => {
            city = COALESCE(EXCLUDED.city, passout_students.city),
            state = COALESCE(EXCLUDED.state, passout_students.state),
            pincode = COALESCE(EXCLUDED.pincode, passout_students.pincode)`,
-        passoutValues
+        [
+          id,
+          firstNameFromUser,
+          lastNameFromUser,
+          safe(date_of_birth, '1900-01-01'),
+          safe(gender, 'Not Specified'),
+          safe(college_name, 'Unknown College'),
+          safe(degree_completed, 'Unknown Degree'),
+          safe(year_of_passing, 2000),
+          safe(current_status, 'Unknown'),
+          safe(city, 'Unknown City'),
+          safe(state, 'Unknown State'),
+          safe(pincode, '000000')
+        ]
       );
-
-      console.log("✅ 'passout_students' upserted successfully.");
-
-    } else {
-      console.warn("🔶 [WARNING] Invalid or missing user_type:", userType);
-      console.log("Skipping role-specific table upsert.");
     }
 
-    // 3️⃣ UPSERT into students (mirror table)
-    console.log("👥 [MIRROR] Preparing to upsert into 'students' (mirror table)...");
-
-    const existingStudentRes = await client.query("SELECT * FROM students WHERE userid=$1", [id]);
-    const existingStudent = existingStudentRes.rows[0] || {};
-
-    const mirrorValues = [
-      id,
-      safe(first_name, existingStudent.first_name, user.name),
-      safe(last_name, existingStudent.last_name, user.name),
-      safe(gender, existingStudent.gender, 'Not Specified'),
-      user.contact_no,
-      user.email,
-      safe(college_name || school_name, existingStudent.college_name, null),
-      safe(year_of_study, existingStudent.study_year, null),
-      safe(city, existingStudent.district, 'Unknown City'),
-      'pending'  // status
-    ];
-
-    console.log("📎 students (mirror) values:", mirrorValues);
-
+    // 3️⃣ Mirror table 'students'
     await client.query(
       `INSERT INTO students
          (userid, first_name, last_name, gender, contact_number, email, college_name, study_year, district, status)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
        ON CONFLICT (userid) DO UPDATE SET
-         first_name = COALESCE(EXCLUDED.first_name, students.first_name),
-         last_name = COALESCE(EXCLUDED.last_name, students.last_name),
+         first_name = EXCLUDED.first_name,
+         last_name = EXCLUDED.last_name,
          gender = COALESCE(EXCLUDED.gender, students.gender),
          contact_number = COALESCE(EXCLUDED.contact_number, students.contact_number),
          email = COALESCE(EXCLUDED.email, students.email),
@@ -1350,15 +1281,21 @@ app.put('/api/auth/update/:id', async (req, res) => {
          study_year = COALESCE(EXCLUDED.study_year, students.study_year),
          district = COALESCE(EXCLUDED.district, students.district),
          status = COALESCE(EXCLUDED.status, students.status)`,
-      mirrorValues
+      [
+        id,
+        firstNameFromUser,
+        lastNameFromUser,
+        safe(gender, 'Not Specified'),
+        user.contact_no,
+        user.email,
+        safe(college_name || school_name, null),
+        safe(year_of_study, null),
+        safe(city, 'Unknown City'),
+        'pending'
+      ]
     );
 
-    console.log("✅ 'students' (mirror) table upserted successfully.");
-
-    // ✅ Commit transaction
     await client.query("COMMIT");
-    console.log("🎉 TRANSACTION COMMITTED SUCCESSFULLY for user:", id);
-    console.log("🟦".repeat(50));
 
     return res.json({
       message: "User updated successfully across all applicable tables.",
@@ -1368,28 +1305,14 @@ app.put('/api/auth/update/:id', async (req, res) => {
         email: user.email,
         user_type: user.db_user_type,
         last_login: user.last_login
-      },
-      updated_tables: {
-        users: true,
-        role_table: userType ? `upserted_${userType}_students` : 'skipped',
-        students_mirror: true
       }
     });
 
   } catch (err) {
     await client.query("ROLLBACK");
-    console.error("💥 [ROLLBACK] Transaction failed:", err.message);
-    console.error("📋 Full error stack:", err.stack);
-    console.log("🟨 TRANSACTION ROLLED BACK for user:", id);
-    console.log("🟦".repeat(50));
-
-    return res.status(500).json({
-      error: "Failed to update user",
-      details: err.message
-    });
+    return res.status(500).json({ error: "Failed to update user", details: err.message });
   } finally {
     client.release();
-    console.log("🔒 [POOL] Database connection released for user:", id);
   }
 });
 
@@ -4740,7 +4663,6 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
-
 
 
 
