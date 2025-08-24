@@ -2410,7 +2410,7 @@ app.post('/stdlogin', async (req, res) => {
 
     const student = result.rows[0];
 
-    if (student.status === 'approved' && !student.payment_method) {
+    if (student.status === 'pending' && !student.payment_method) {
       // Approved but payment missing
       return res.status(403).json({ 
         error: 'Your account is not registered for referral.' 
@@ -4740,6 +4740,7 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
 
 
 
