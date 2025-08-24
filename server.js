@@ -171,21 +171,21 @@ app.post('/api/auth/register', async (req, res) => {
         `INSERT INTO school_students
           (user_id, first_name, last_name, date_of_birth, gender, school_name, class_grade, city, state, pincode)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-        [userId, first_name, last_name, date_of_birth, gender, school_name, class_grade, city, state, pincode]
+        [userId, name, name, date_of_birth, gender, school_name, class_grade, city, state, pincode]
       );
     } else if (user_type === "college") {
       await client.query(
         `INSERT INTO college_students
           (user_id, first_name, last_name, date_of_birth, gender, college_name, course_degree, year_of_study, city, state, pincode)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-        [userId, first_name, last_name, date_of_birth, gender, college_name, course_degree, year_of_study, city, state, pincode]
+        [userId, name, name, date_of_birth, gender, college_name, course_degree, year_of_study, city, state, pincode]
       );
     } else if (user_type === "passout") {
       await client.query(
         `INSERT INTO passout_students
           (user_id, first_name, last_name, date_of_birth, gender, college_name, degree_completed, year_of_passing, current_status, city, state, pincode)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-        [userId, first_name, last_name, date_of_birth, gender, college_name, degree_completed, year_of_passing, current_status, city, state, pincode]
+        [userId, name, name, date_of_birth, gender, college_name, degree_completed, year_of_passing, current_status, city, state, pincode]
       );
     }
 
@@ -4740,6 +4740,7 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
 
 
 
